@@ -9,7 +9,6 @@ import {
 import {
   doc, collection, onSnapshot, setDoc, updateDoc,
   deleteDoc, serverTimestamp, writeBatch, query, orderBy,
-  getDoc,
 } from 'firebase/firestore';
 import { db, auth, isFirebaseConfigured } from '../firebase';
 import { generateSeedData, DEFAULT_CAPTAINS, CAPTAIN_COLORS } from '../utils/seedData';
@@ -22,7 +21,7 @@ export const DEFAULT_SETTINGS = {
   startDate:         '2026-06-15',
   numWeeks:          11,
   defaultTime:       '8:00 AM',
-  practiceDays:      [0, 1, 2, 3, 4],   // 0 = Mon offset
+  practiceDays:      [0, 1, 2, 3, 4],
   minCoveredDays:    3,
   minCaptainsPerDay: 1,
   teamCode:          'xc2026',
@@ -32,9 +31,26 @@ export const DEFAULT_SETTINGS = {
 const STORAGE = {
   TEAM_VERIFIED: 'xc-team-ok',
   CAPTAIN_ID:    'xc-captain',
-  ADMIN:         'xc-admin',        // sessionStorage
+  ADMIN:         'xc-admin',
   DARK_MODE:     'xc-dark',
+  DEMO:          'xc-demo-v2',      // localStorage key for demo mode data
 };
+
+// ── Demo-mode helpers ─────────────────────────────────────────────────────────
+
+function loadDemo() {
+  try {
+    const raw = localStorage.getItem(STORAGE.DEMO);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveDemo(patch) {
+  try {
+    const cur = loadDemo() || {};
+    localStorage.setItem(STORAGE.DEMO, JSON.stringify({ ...cur, ...patch }));
+  } catch {}
+}
 
 // ── Context ───────────────────────────────────────────────────────────────────
 
@@ -49,13 +65,16 @@ export function useApp() {
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function AppProvider({ children }) {
+  // Demo mode = no Firebase env vars → use localStorage only
+  const demoMode = !isFirebaseConfigured;
+
   /* ── Auth ─────────────────────────────────────────────────────────────── */
   const [firebaseUser,  setFirebaseUser]  = useState(null);
-  const [authLoading,   setAuthLoading]   = useState(isFirebaseConfigured);
+  const [authLoading,   setAuthLoading]   = useState(!demoMode && isFirebaseConfigured);
 
   /* ── Access ───────────────────────────────────────────────────────────── */
   const [teamVerified, setTeamVerified] = useState(
-    () => localStorage.getItem(STORAGE.TEAM_VERIFIED) === 'true'
+    () => demoMode || localStorage.getItem(STORAGE.TEAM_VERIFIED) === 'true'
   );
   const [isAdmin, setIsAdmin] = useState(
     () => sessionStorage.getItem(STORAGE.ADMIN) === 'true'
@@ -71,24 +90,51 @@ export function AppProvider({ children }) {
     () => localStorage.getItem(STORAGE.DARK_MODE) === 'true'
   );
 
-  /* ── Firestore data ───────────────────────────────────────────────────── */
+  /* ── Data ─────────────────────────────────────────────────────────────── */
   const [settings,    setSettings]    = useState(DEFAULT_SETTINGS);
   const [captains,    setCaptains]    = useState([]);
-  const [attendance,  setAttendance]  = useState({});   // { dateStr: { capId: bool } }
-  const [dayDetails,  setDayDetails]  = useState({});   // { dateStr: { workoutType, ... } }
+  const [attendance,  setAttendance]  = useState({});
+  const [dayDetails,  setDayDetails]  = useState({});
   const [dataLoading, setDataLoading] = useState(true);
 
   const initializing = useRef(false);
 
-  /* ── Dark mode side-effect ────────────────────────────────────────────── */
+  /* ── Dark mode sync ───────────────────────────────────────────────────── */
   useEffect(() => {
     localStorage.setItem(STORAGE.DARK_MODE, darkMode);
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
+  /* ── Demo mode bootstrap ──────────────────────────────────────────────── */
+  useEffect(() => {
+    if (!demoMode) return;
+
+    const saved = loadDemo();
+    if (saved?.captains?.length) {
+      setSettings({ ...DEFAULT_SETTINGS, ...(saved.settings || {}) });
+      setCaptains(saved.captains);
+      setAttendance(saved.attendance || {});
+      setDayDetails(saved.dayDetails || {});
+    } else {
+      // First visit: seed demo data
+      const seed = generateSeedData(DEFAULT_SETTINGS.startDate);
+      setSettings(DEFAULT_SETTINGS);
+      setCaptains(seed.captains);
+      setAttendance(seed.attendance);
+      setDayDetails(seed.dayDetails);
+      saveDemo({
+        settings:   DEFAULT_SETTINGS,
+        captains:   seed.captains,
+        attendance: seed.attendance,
+        dayDetails: seed.dayDetails,
+      });
+    }
+    setDataLoading(false);
+  }, [demoMode]);
+
   /* ── Firebase Anonymous Auth ──────────────────────────────────────────── */
   useEffect(() => {
-    if (!isFirebaseConfigured || !auth) {
+    if (demoMode || !auth) {
       setAuthLoading(false);
       return;
     }
@@ -107,15 +153,14 @@ export function AppProvider({ children }) {
       setAuthLoading(false);
     });
     return unsub;
-  }, []);
+  }, [demoMode]);
 
   /* ── Firestore Listeners ──────────────────────────────────────────────── */
   useEffect(() => {
-    if (!isFirebaseConfigured || !db || !firebaseUser) return;
+    if (demoMode || !db || !firebaseUser) return;
 
     const unsubs = [];
 
-    // config/main
     unsubs.push(
       onSnapshot(doc(db, 'config', 'main'), async (snap) => {
         if (!snap.exists()) {
@@ -127,98 +172,59 @@ export function AppProvider({ children }) {
           setSettings({ ...DEFAULT_SETTINGS, ...snap.data() });
           setDataLoading(false);
         }
-      }, (err) => {
-        console.error('config/main listener error:', err);
-        setDataLoading(false);
-      })
+      }, (err) => { console.error('config listener:', err); setDataLoading(false); })
     );
 
-    // captains (ordered)
     unsubs.push(
       onSnapshot(
         query(collection(db, 'captains'), orderBy('order', 'asc')),
-        (snap) => {
-          setCaptains(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        },
-        (err) => console.error('captains listener error:', err)
+        (snap) => setCaptains(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+        (err) => console.error('captains listener:', err)
       )
     );
 
-    // attendance (all docs)
     unsubs.push(
       onSnapshot(collection(db, 'attendance'), (snap) => {
         const data = {};
         snap.docs.forEach(d => { data[d.id] = d.data(); });
         setAttendance(data);
-      }, (err) => console.error('attendance listener error:', err))
+      }, (err) => console.error('attendance listener:', err))
     );
 
-    // dayDetails (all docs)
     unsubs.push(
       onSnapshot(collection(db, 'dayDetails'), (snap) => {
         const data = {};
         snap.docs.forEach(d => { data[d.id] = d.data(); });
         setDayDetails(data);
-      }, (err) => console.error('dayDetails listener error:', err))
+      }, (err) => console.error('dayDetails listener:', err))
     );
 
     return () => unsubs.forEach(u => u());
-  }, [firebaseUser]);
+  }, [demoMode, firebaseUser]);
 
-  /* ── First-run initialization ─────────────────────────────────────────── */
+  /* ── First-run Firebase initialization ───────────────────────────────── */
   async function initDatabase() {
     const seed = generateSeedData(DEFAULT_SETTINGS.startDate);
     const batch = writeBatch(db);
-
-    // Config
-    batch.set(doc(db, 'config', 'main'), {
-      ...DEFAULT_SETTINGS,
-      createdAt: serverTimestamp(),
-    });
-
-    // Captains
+    batch.set(doc(db, 'config', 'main'), { ...DEFAULT_SETTINGS, createdAt: serverTimestamp() });
     seed.captains.forEach((cap, i) => {
-      batch.set(doc(db, 'captains', cap.id), {
-        name:      cap.name,
-        color:     cap.color,
-        order:     i,
-        createdAt: serverTimestamp(),
-      });
+      batch.set(doc(db, 'captains', cap.id), { name: cap.name, color: cap.color, order: i, createdAt: serverTimestamp() });
     });
-
-    // Day details
-    Object.entries(seed.dayDetails).forEach(([dateStr, detail]) => {
-      batch.set(doc(db, 'dayDetails', dateStr), {
-        ...detail,
-        updatedAt: serverTimestamp(),
-      });
-    });
-
-    // Attendance
-    Object.entries(seed.attendance).forEach(([dateStr, data]) => {
-      batch.set(doc(db, 'attendance', dateStr), {
-        ...data,
-        updatedAt: serverTimestamp(),
-      });
-    });
-
+    Object.entries(seed.dayDetails).forEach(([d, v]) => batch.set(doc(db, 'dayDetails', d), { ...v, updatedAt: serverTimestamp() }));
+    Object.entries(seed.attendance).forEach(([d, v]) => batch.set(doc(db, 'attendance', d), { ...v, updatedAt: serverTimestamp() }));
     await batch.commit();
   }
 
   /* ── Team/Admin verification ──────────────────────────────────────────── */
   const verifyTeamCode = useCallback(async (code) => {
-    if (!isFirebaseConfigured) {
-      setTeamVerified(true);
-      localStorage.setItem(STORAGE.TEAM_VERIFIED, 'true');
-      return true;
-    }
+    if (demoMode) return true; // demo: no code needed
     const correct = code.trim().toLowerCase() === (settings.teamCode || '').toLowerCase();
     if (correct) {
       setTeamVerified(true);
       localStorage.setItem(STORAGE.TEAM_VERIFIED, 'true');
     }
     return correct;
-  }, [settings.teamCode]);
+  }, [demoMode, settings.teamCode]);
 
   const verifyAdminCode = useCallback((code) => {
     const correct = code.trim() === settings.adminCode;
@@ -247,85 +253,132 @@ export function AppProvider({ children }) {
 
   /* ── Attendance ───────────────────────────────────────────────────────── */
   const toggleAttendance = useCallback(async (dateStr, captainId) => {
+    if (demoMode) {
+      setAttendance(prev => {
+        const next = {
+          ...prev,
+          [dateStr]: { ...(prev[dateStr] || {}), [captainId]: !(prev[dateStr]?.[captainId]) },
+        };
+        saveDemo({ attendance: next });
+        return next;
+      });
+      return;
+    }
     if (!db) return;
     const current = attendance[dateStr]?.[captainId] === true;
     try {
-      await setDoc(
-        doc(db, 'attendance', dateStr),
-        { [captainId]: !current, updatedAt: serverTimestamp() },
-        { merge: true }
-      );
-    } catch (err) {
-      console.error('toggleAttendance failed:', err);
-    }
-  }, [attendance]);
+      await setDoc(doc(db, 'attendance', dateStr), { [captainId]: !current, updatedAt: serverTimestamp() }, { merge: true });
+    } catch (err) { console.error('toggleAttendance:', err); }
+  }, [demoMode, attendance]);
 
   /* ── Settings ─────────────────────────────────────────────────────────── */
   const updateSettings = useCallback(async (updates) => {
+    if (demoMode) {
+      setSettings(prev => {
+        const next = { ...prev, ...updates };
+        saveDemo({ settings: next });
+        return next;
+      });
+      return;
+    }
     if (!db) return;
     try {
-      await setDoc(doc(db, 'config', 'main'), {
-        ...updates,
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-    } catch (err) {
-      console.error('updateSettings failed:', err);
-    }
-  }, []);
+      await setDoc(doc(db, 'config', 'main'), { ...updates, updatedAt: serverTimestamp() }, { merge: true });
+    } catch (err) { console.error('updateSettings:', err); }
+  }, [demoMode]);
 
   /* ── Captains ─────────────────────────────────────────────────────────── */
   const addCaptain = useCallback(async (name, color) => {
-    if (!db) return;
     const id = `cap_${Date.now()}`;
+    if (demoMode) {
+      setCaptains(prev => {
+        const next = [...prev, { id, name: name.trim(), color: color || CAPTAIN_COLORS[prev.length % CAPTAIN_COLORS.length], order: prev.length }];
+        saveDemo({ captains: next });
+        return next;
+      });
+      return;
+    }
+    if (!db) return;
     await setDoc(doc(db, 'captains', id), {
-      name:      name.trim(),
-      color:     color || CAPTAIN_COLORS[captains.length % CAPTAIN_COLORS.length],
-      order:     captains.length,
+      name: name.trim(),
+      color: color || CAPTAIN_COLORS[captains.length % CAPTAIN_COLORS.length],
+      order: captains.length,
       createdAt: serverTimestamp(),
     });
-  }, [captains.length]);
+  }, [demoMode, captains.length]);
 
   const removeCaptain = useCallback(async (captainId) => {
+    if (demoMode) {
+      setCaptains(prev => {
+        const next = prev.filter(c => c.id !== captainId);
+        saveDemo({ captains: next });
+        return next;
+      });
+      setAttendance(prev => {
+        const next = {};
+        for (const [d, v] of Object.entries(prev)) {
+          const { [captainId]: _, ...rest } = v;
+          next[d] = rest;
+        }
+        saveDemo({ attendance: next });
+        return next;
+      });
+      return;
+    }
     if (!db) return;
     await deleteDoc(doc(db, 'captains', captainId));
-    // Also clean up attendance
     const batch = writeBatch(db);
     for (const dateStr of Object.keys(attendance)) {
       if (attendance[dateStr]?.[captainId] !== undefined) {
-        const ref = doc(db, 'attendance', dateStr);
-        // Firestore FieldValue.delete() workaround with merge false:
-        // Re-set doc minus that field
         const cleaned = { ...attendance[dateStr] };
         delete cleaned[captainId];
         delete cleaned.updatedAt;
-        batch.set(ref, { ...cleaned, updatedAt: serverTimestamp() });
+        batch.set(doc(db, 'attendance', dateStr), { ...cleaned, updatedAt: serverTimestamp() });
       }
     }
     await batch.commit();
-  }, [attendance]);
+  }, [demoMode, attendance]);
 
   const updateCaptain = useCallback(async (captainId, updates) => {
+    if (demoMode) {
+      setCaptains(prev => {
+        const next = prev.map(c => c.id === captainId ? { ...c, ...updates } : c);
+        saveDemo({ captains: next });
+        return next;
+      });
+      return;
+    }
     if (!db) return;
-    await updateDoc(doc(db, 'captains', captainId), {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    });
-  }, []);
+    await updateDoc(doc(db, 'captains', captainId), { ...updates, updatedAt: serverTimestamp() });
+  }, [demoMode]);
 
   /* ── Day details ──────────────────────────────────────────────────────── */
   const setDayDetail = useCallback(async (dateStr, detail) => {
+    if (demoMode) {
+      setDayDetails(prev => {
+        const next = { ...prev, [dateStr]: { ...(prev[dateStr] || {}), ...detail } };
+        saveDemo({ dayDetails: next });
+        return next;
+      });
+      return;
+    }
     if (!db) return;
-    await setDoc(
-      doc(db, 'dayDetails', dateStr),
-      { ...detail, updatedAt: serverTimestamp() },
-      { merge: true }
-    );
-  }, []);
+    await setDoc(doc(db, 'dayDetails', dateStr), { ...detail, updatedAt: serverTimestamp() }, { merge: true });
+  }, [demoMode]);
 
   const clearDayDetail = useCallback(async (dateStr) => {
+    if (demoMode) {
+      setDayDetails(prev => {
+        const next = { ...prev };
+        delete next[dateStr];
+        saveDemo({ dayDetails: next });
+        return next;
+      });
+      return;
+    }
     if (!db) return;
     await deleteDoc(doc(db, 'dayDetails', dateStr));
-  }, []);
+  }, [demoMode]);
 
   /* ── Derived helpers ──────────────────────────────────────────────────── */
   const getAttendingCaptains = useCallback((dateStr) => {
@@ -342,25 +395,17 @@ export function AppProvider({ children }) {
   }, [attendance]);
 
   const getWeekStats = useCallback((dayDates) => {
-    let coveredCount  = 0;
-    let totalActive   = 0;
+    let coveredCount = 0, totalActive = 0;
     const uncoveredDates = [];
-
     for (const d of dayDates) {
       if (dayDetails[d]?.cancelled) continue;
       totalActive++;
       const count = captains.filter(c => attendance[d]?.[c.id] === true).length;
-      if (count >= settings.minCaptainsPerDay) {
-        coveredCount++;
-      } else {
-        uncoveredDates.push(d);
-      }
+      if (count >= settings.minCaptainsPerDay) coveredCount++;
+      else uncoveredDates.push(d);
     }
-
     return {
-      coveredCount,
-      totalActive,
-      uncoveredDates,
+      coveredCount, totalActive, uncoveredDates,
       isCovered:  coveredCount >= settings.minCoveredDays,
       isPartial:  coveredCount > 0 && coveredCount < settings.minCoveredDays,
     };
@@ -369,63 +414,28 @@ export function AppProvider({ children }) {
   const getCaptainStats = useCallback(() => {
     const stats = {};
     for (const c of captains) {
-      stats[c.id] = Object.values(attendance).reduce((acc, day) => {
-        return acc + (day[c.id] === true ? 1 : 0);
-      }, 0);
+      stats[c.id] = Object.values(attendance).reduce((acc, day) => acc + (day[c.id] === true ? 1 : 0), 0);
     }
     return stats;
   }, [captains, attendance]);
 
   /* ── Expose ───────────────────────────────────────────────────────────── */
   const value = {
-    // Status
-    isFirebaseConfigured,
-    authLoading,
-    dataLoading,
-    firebaseUser,
-
-    // Access
-    teamVerified,
-    isAdmin,
-    verifyTeamCode,
-    verifyAdminCode,
-    logoutAdmin,
-
-    // Captain identity
-    currentCaptainId,
-    selectCaptain,
-    deselectCaptain,
+    isFirebaseConfigured, demoMode,
+    authLoading, dataLoading, firebaseUser,
+    teamVerified, isAdmin, verifyTeamCode, verifyAdminCode, logoutAdmin,
+    currentCaptainId, selectCaptain, deselectCaptain,
     currentCaptain: captains.find(c => c.id === currentCaptainId) || null,
-
-    // Data
-    settings,
-    captains,
-    attendance,
-    dayDetails,
-
-    // Dark mode
-    darkMode,
-    toggleDarkMode: () => setDarkMode(d => !d),
-
-    // Mutations
-    toggleAttendance,
-    updateSettings,
-    addCaptain,
-    removeCaptain,
-    updateCaptain,
-    setDayDetail,
-    clearDayDetail,
-
-    // Derived
-    getAttendingCaptains,
-    isDayCancelled,
-    isCaptainAttending,
-    getWeekStats,
-    getCaptainStats,
-
-    // Constants available to UI
+    settings, captains, attendance, dayDetails,
+    darkMode, toggleDarkMode: () => setDarkMode(d => !d),
+    toggleAttendance, updateSettings,
+    addCaptain, removeCaptain, updateCaptain,
+    setDayDetail, clearDayDetail,
+    getAttendingCaptains, isDayCancelled, isCaptainAttending,
+    getWeekStats, getCaptainStats,
     CAPTAIN_COLORS,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
+

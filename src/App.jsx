@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Moon, Sun, Settings, LogOut, ChevronDown, ChevronUp } from 'lucide-react';
+import { Moon, Sun, Settings, LogOut, ChevronDown, ChevronUp, Database } from 'lucide-react';
 import { useApp } from './context/AppContext';
 import { generateSchedule, today, fromDateStr } from './utils/dates';
-import SetupGuide from './components/SetupGuide';
 import AccessGate from './components/AccessGate';
 import Dashboard from './components/Dashboard';
 import WeekCard from './components/WeekCard';
@@ -10,7 +9,7 @@ import AdminPanel from './components/AdminPanel';
 
 export default function App() {
   const {
-    isFirebaseConfigured, authLoading, dataLoading,
+    demoMode, authLoading, dataLoading,
     settings, captains, dayDetails, attendance,
     currentCaptainId, currentCaptain, deselectCaptain,
     teamVerified, darkMode, toggleDarkMode,
@@ -22,10 +21,7 @@ export default function App() {
 
   // ── Routing guards ─────────────────────────────────────────────────────────
 
-  // 1. Firebase not configured → setup guide
-  if (!isFirebaseConfigured) return <SetupGuide />;
-
-  // 2. Auth or data still loading → spinner
+  // 1. Auth or data still loading → spinner
   if (authLoading || (dataLoading && captains.length === 0)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
@@ -39,8 +35,8 @@ export default function App() {
     );
   }
 
-  // 3. Team not verified or no captain selected → access gate
-  if (!teamVerified || !currentCaptainId) return <AccessGate />;
+  // 2. No captain selected → access gate (also handles team code if Firebase mode)
+  if (!currentCaptainId) return <AccessGate />;
 
   // ── Schedule generation ────────────────────────────────────────────────────
   const weeks = useMemo(() =>
@@ -86,7 +82,7 @@ export default function App() {
                 {settings.teamName}
               </h1>
               <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium">
-                Summer Schedule · Live 🔴
+                {demoMode ? 'Demo Mode · Local Only' : 'Summer Schedule · Live 🔴'}
               </p>
             </div>
 
@@ -142,6 +138,17 @@ export default function App() {
             style={{ backgroundColor: currentCaptain.color + '18', color: currentCaptain.color }}
           >
             👋 Hi {currentCaptain.name}! Tap any day to toggle your attendance
+          </div>
+        )}
+
+        {/* ── Demo mode banner ──────────────────────────────────────────── */}
+        {demoMode && (
+          <div className="mx-4 mt-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300 animate-fade-in">
+            <Database size={12} className="flex-shrink-0" />
+            <span>
+              <strong>Demo mode</strong> — data saves to this device only.
+              {' '}<a href="https://github.com" className="underline opacity-70">Add Firebase</a> for real-time sync across all phones.
+            </span>
           </div>
         )}
 
