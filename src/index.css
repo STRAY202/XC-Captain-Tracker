@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply font-sans antialiased;
+    margin: 0;
+  }
+  #root {
+    width: 100%;
+  }
+}
+
+@layer components {
+  .day-btn {
+    @apply relative flex flex-col items-center justify-center rounded-xl transition-all duration-200 active:scale-95 select-none cursor-pointer;
+  }
+  .week-card {
+    @apply rounded-2xl p-4 transition-all duration-300;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer select-none active:scale-95;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 9999px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
