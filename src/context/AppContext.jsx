@@ -52,14 +52,21 @@ export const DEFAULT_SETTINGS = {
   minCaptainsPerDay: 1,
   teamCode:          'xc2026',
   adminCode:         'admin2026',
+  announcements:     [],
+  onboarding: {
+    welcomeTitle:    '',
+    welcomeSubtitle: '',
+    slides:          [],
+  },
 };
 
 const STORAGE = {
-  TEAM_VERIFIED: 'xc-team-ok',
-  CAPTAIN_ID:    'xc-captain',
-  ADMIN:         'xc-admin',
-  DARK_MODE:     'xc-dark',
-  DEMO:          'xc-demo-v3',   // bumped → clears stale data with old captain names
+  TEAM_VERIFIED:   'xc-team-ok',
+  CAPTAIN_ID:      'xc-captain',
+  ADMIN:           'xc-admin',
+  DARK_MODE:       'xc-dark',
+  DEMO:            'xc-demo-v3',
+  ONBOARDING_DONE: 'xc-onboarding',
 };
 
 // ── Demo-mode helpers ─────────────────────────────────────────────────────────
@@ -111,9 +118,15 @@ export function AppProvider({ children }) {
     () => safeGet(STORAGE.CAPTAIN_ID) || null
   );
 
-  /* ── Dark mode ────────────────────────────────────────────────────────── */
-  const [darkMode, setDarkMode] = useState(
-    () => safeGet(STORAGE.DARK_MODE) === 'true'
+  /* ── Dark mode — defaults to true (dark) on first visit ──────────────── */
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = safeGet(STORAGE.DARK_MODE);
+    return saved === null ? true : saved === 'true';
+  });
+
+  /* ── Onboarding ───────────────────────────────────────────────────────── */
+  const [onboardingDone, setOnboardingDone] = useState(
+    () => safeGet(STORAGE.ONBOARDING_DONE) === 'true'
   );
 
   /* ── Data ─────────────────────────────────────────────────────────────── */
@@ -191,7 +204,7 @@ export function AppProvider({ children }) {
         } catch (err) {
           console.error('[AppContext] Anonymous sign-in failed:', err);
           setAuthLoading(false);
-          setDataLoading(false);  // won't get Firestore listeners without auth
+          setDataLoading(false);
           setLoadError(true);
           return;
         }
@@ -302,6 +315,12 @@ export function AppProvider({ children }) {
     console.log('[AppContext] Captain deselected');
     setCurrentCaptainId(null);
     safeRemove(STORAGE.CAPTAIN_ID);
+  }, []);
+
+  /* ── Onboarding ───────────────────────────────────────────────────────── */
+  const markOnboardingDone = useCallback(() => {
+    setOnboardingDone(true);
+    safeSet(STORAGE.ONBOARDING_DONE, 'true');
   }, []);
 
   /* ── Attendance ───────────────────────────────────────────────────────── */
@@ -481,6 +500,7 @@ export function AppProvider({ children }) {
     currentCaptain: captains.find(c => c.id === currentCaptainId) || null,
     settings, captains, attendance, dayDetails,
     darkMode, toggleDarkMode: () => setDarkMode(d => !d),
+    onboardingDone, markOnboardingDone,
     toggleAttendance, updateSettings,
     addCaptain, removeCaptain, updateCaptain,
     setDayDetail, clearDayDetail,
@@ -491,4 +511,3 @@ export function AppProvider({ children }) {
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
-

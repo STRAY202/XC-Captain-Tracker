@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
   Moon, Sun, Settings, LogOut, ChevronDown, ChevronUp,
-  Database, RefreshCw, Zap,
+  Database, RefreshCw, Zap, HelpCircle,
 } from 'lucide-react';
 import { useApp } from './context/AppContext';
 import { generateSchedule, today, fromDateStr } from './utils/dates';
@@ -10,6 +10,7 @@ import Dashboard from './components/Dashboard';
 import WeekCard from './components/WeekCard';
 import AdminPanel from './components/AdminPanel';
 import ErrorBoundary from './components/ErrorBoundary';
+import OnboardingFlow from './components/OnboardingFlow';
 
 export default function App() {
   const {
@@ -18,12 +19,14 @@ export default function App() {
     currentCaptainId, currentCaptain, deselectCaptain,
     darkMode, toggleDarkMode,
     getCaptainStats,
+    onboardingDone, markOnboardingDone,
   } = useApp();
 
   // ── All hooks must be called unconditionally before any conditional return ──
   const [showAdmin,    setShowAdmin]    = useState(false);
   const [showAllWeeks, setShowAllWeeks] = useState(false);
   const [timedOut,     setTimedOut]     = useState(false);
+  const [showHelp,     setShowHelp]     = useState(false);
 
   const isLoading = authLoading || (dataLoading && captains.length === 0);
 
@@ -72,6 +75,11 @@ export default function App() {
   const totalActiveDays = useMemo(() =>
     weeks.flatMap(w => w.days).filter(d => !dayDetails[d]?.cancelled).length,
     [weeks, dayDetails]
+  );
+
+  const activeAnnouncements = useMemo(() =>
+    (settings.announcements || []).filter(a => a.active !== false),
+    [settings.announcements]
   );
 
   // ── Routing guards — after all hooks ──────────────────────────────────────────
@@ -165,6 +173,14 @@ export default function App() {
                 </button>
 
                 <button
+                  onClick={() => setShowHelp(true)}
+                  className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-90"
+                  aria-label="How it works"
+                >
+                  <HelpCircle size={15} className="text-gray-500 dark:text-gray-400" />
+                </button>
+
+                <button
                   onClick={() => setShowAdmin(true)}
                   className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-90"
                   aria-label="Open settings"
@@ -211,6 +227,23 @@ export default function App() {
             >
               <span>👋</span>
               <span>Hi {currentCaptain.name}! Tap any day button to toggle your attendance</span>
+            </div>
+          )}
+
+          {/* ── Announcements ────────────────────────────────────────────── */}
+          {activeAnnouncements.length > 0 && (
+            <div className="mx-4 mt-2 space-y-1.5 animate-fade-in">
+              {activeAnnouncements.map(ann => (
+                <div
+                  key={ann.id}
+                  className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/60"
+                >
+                  <span className="text-base flex-shrink-0" aria-hidden>📢</span>
+                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 leading-snug flex-1">
+                    {ann.text}
+                  </p>
+                </div>
+              ))}
             </div>
           )}
 
@@ -387,6 +420,22 @@ export default function App() {
 
         {/* ── Admin panel modal ──────────────────────────────────────────── */}
         {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
+
+        {/* ── First-time onboarding (auto-shown, dismissed permanently) ──── */}
+        {!onboardingDone && !showHelp && (
+          <OnboardingFlow onComplete={() => {}} />
+        )}
+
+        {/* ── Help / How it works (re-openable from header) ─────────────── */}
+        {showHelp && (
+          <OnboardingFlow
+            isHelp
+            onComplete={() => {
+              if (!onboardingDone) markOnboardingDone();
+              setShowHelp(false);
+            }}
+          />
+        )}
       </div>
     </ErrorBoundary>
   );
