@@ -106,12 +106,16 @@ export default function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-hero">
         <div className="text-center animate-fade-in">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">🏃</span>
+          <div className="relative w-20 h-20 mx-auto mb-6">
+            <div className="w-20 h-20 rounded-3xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center backdrop-blur-sm">
+              <Zap size={32} className="text-emerald-400" fill="currentColor" />
+            </div>
+            <div className="absolute inset-0 rounded-3xl bg-emerald-500/10 animate-ping" />
           </div>
-          <p className="text-sm font-semibold text-emerald-400 animate-pulse tracking-wide">
+          <p className="text-base font-bold text-white tracking-wide">
             Loading team…
           </p>
+          <p className="text-xs text-emerald-400/70 mt-1 animate-pulse">Syncing schedule</p>
         </div>
       </div>
     );
@@ -126,20 +130,23 @@ export default function App() {
         <div className="max-w-lg mx-auto pb-24">
 
           {/* ── Sticky glass header ──────────────────────────────────────── */}
-          <div className="sticky top-0 z-40 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50 shadow-sm">
+          <div className="sticky top-0 z-40 bg-white/85 dark:bg-gray-900/85 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-800/60 shadow-sm">
             <div className="flex items-center justify-between px-4 py-3 pt-safe">
 
-              {/* Left: brand mark + team info */}
+              {/* Left: gradient dot + team info */}
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-gradient-brand flex-shrink-0 flex items-center justify-center shadow-brand">
-                  <Zap size={14} className="text-white" fill="white" />
+                <div className="w-9 h-9 rounded-xl bg-gradient-brand flex-shrink-0 flex items-center justify-center shadow-brand">
+                  <Zap size={16} className="text-white" fill="white" />
                 </div>
                 <div className="min-w-0">
                   <h1 className="text-sm font-extrabold text-gray-900 dark:text-white leading-tight tracking-tight truncate">
                     {settings.teamName}
                   </h1>
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium leading-none mt-0.5">
-                    {demoMode ? 'Demo Mode · Local Only' : 'Live Schedule · Synced 🟢'}
+                    {demoMode ? 'Demo Mode · Local Only' : 'Live · Synced'}
+                    {!demoMode && (
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 ml-1 mb-[1px] shadow-sm" />
+                    )}
                   </p>
                 </div>
               </div>
@@ -209,15 +216,20 @@ export default function App() {
 
           {/* ── Demo mode banner ─────────────────────────────────────────── */}
           {demoMode && (
-            <div className="mx-4 mt-2 flex items-start gap-2 px-3.5 py-2.5 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-800/70 text-xs text-blue-700 dark:text-blue-300 animate-fade-in">
-              <Database size={13} className="flex-shrink-0 mt-0.5 text-blue-500" />
-              <span>
-                <strong>Demo mode</strong> — data saves to this device only.{' '}
-                <a href="https://firebase.google.com" className="underline underline-offset-2 opacity-70 hover:opacity-100">
-                  Add Firebase
-                </a>{' '}
-                for real-time sync across all phones.
-              </span>
+            <div className="mx-4 mt-2 flex items-start gap-2.5 px-3.5 py-3 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-800/70 animate-fade-in">
+              <div className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Database size={13} className="text-blue-500" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-blue-700 dark:text-blue-300">Demo Mode</p>
+                <p className="text-xs text-blue-600/70 dark:text-blue-400/70 mt-0.5">
+                  Data saves to this device only.{' '}
+                  <a href="https://firebase.google.com" className="underline underline-offset-2 font-semibold hover:opacity-100 opacity-80">
+                    Add Firebase
+                  </a>{' '}
+                  for real-time sync.
+                </p>
+              </div>
             </div>
           )}
 
@@ -268,24 +280,26 @@ export default function App() {
           </div>
 
           {/* ── Team Attendance leaderboard ──────────────────────────────── */}
-          <div className="mx-4 mt-4 rounded-3xl overflow-hidden shadow-card-lg">
+          <div className="mx-4 mt-5 rounded-3xl overflow-hidden shadow-card-lg">
             {/* Gradient header */}
-            <div className="bg-gradient-hero px-5 pt-5 pb-4">
-              <div className="flex items-center gap-2 mb-0.5">
-                <div className="w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm">🏆</span>
+            <div className="bg-gradient-hero px-5 pt-5 pb-5">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0 backdrop-blur-sm">
+                  <span className="text-lg">🏆</span>
                 </div>
-                <h3 className="text-base font-extrabold text-white tracking-tight">
-                  Team Attendance
-                </h3>
+                <div>
+                  <h3 className="text-base font-extrabold text-white tracking-tight leading-tight">
+                    Team Attendance
+                  </h3>
+                  <p className="text-[11px] text-emerald-400/80 font-medium">
+                    Season leaderboard
+                  </p>
+                </div>
               </div>
-              <p className="text-[11px] text-emerald-400/80 font-medium ml-9">
-                Season leaderboard
-              </p>
             </div>
 
             {/* Stats list */}
-            <div className="bg-white dark:bg-gray-900 px-5 py-4 space-y-4">
+            <div className="bg-white dark:bg-gray-900 px-5 py-5 space-y-5">
               {[...Object.keys(captainStats || {})]
                 .map(id => ({ captain: captains.find(c => c.id === id), count: captainStats[id] || 0 }))
                 .filter(({ captain }) => captain)
@@ -295,27 +309,24 @@ export default function App() {
                     ? Math.round((count / totalActiveDays) * 100)
                     : 0;
                   const isMe = captain.id === currentCaptainId;
+                  const medal = rankIdx === 0 ? '🥇' : rankIdx === 1 ? '🥈' : rankIdx === 2 ? '🥉' : null;
 
                   return (
-                    <div key={captain.id} className="flex items-center gap-3">
-                      {/* Rank number */}
-                      <div className="w-5 text-center">
-                        <span className={`text-xs font-black ${
-                          rankIdx === 0
-                            ? 'text-amber-400'
-                            : rankIdx === 1
-                            ? 'text-gray-400'
-                            : rankIdx === 2
-                            ? 'text-amber-700'
-                            : 'text-gray-300 dark:text-gray-600'
-                        }`}>
-                          {rankIdx === 0 ? '🥇' : rankIdx === 1 ? '🥈' : rankIdx === 2 ? '🥉' : `${rankIdx + 1}`}
-                        </span>
+                    <div key={captain.id} className={`flex items-center gap-3 ${isMe ? 'relative' : ''}`}>
+                      {/* Rank */}
+                      <div className="w-6 text-center flex-shrink-0">
+                        {medal ? (
+                          <span className="text-base leading-none">{medal}</span>
+                        ) : (
+                          <span className="text-xs font-black text-gray-300 dark:text-gray-600">
+                            {rankIdx + 1}
+                          </span>
+                        )}
                       </div>
 
                       {/* Avatar */}
                       <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-extrabold flex-shrink-0 shadow-sm"
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-extrabold flex-shrink-0 shadow-sm"
                         style={{ backgroundColor: captain.color }}
                       >
                         {captain.name.charAt(0)}
@@ -323,33 +334,36 @@ export default function App() {
 
                       {/* Name + bar */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className={`text-sm font-bold leading-none ${
-                            isMe
-                              ? 'text-gray-900 dark:text-white'
-                              : 'text-gray-700 dark:text-gray-200'
-                          }`}>
-                            {captain.name}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={`text-sm font-bold leading-none truncate ${
+                              isMe
+                                ? 'text-gray-900 dark:text-white'
+                                : 'text-gray-700 dark:text-gray-200'
+                            }`}>
+                              {captain.name}
+                            </span>
                             {isMe && (
                               <span
-                                className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white"
+                                className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white flex-shrink-0"
                                 style={{ backgroundColor: captain.color }}
                               >
                                 you
                               </span>
                             )}
-                          </span>
-                          <span className="text-xs font-bold text-gray-400 dark:text-gray-500 tabular-nums ml-2">
+                          </div>
+                          <span className="text-xs font-bold text-gray-400 dark:text-gray-500 tabular-nums ml-2 flex-shrink-0">
                             {count}<span className="font-normal opacity-60">/{totalActiveDays}</span>
                           </span>
                         </div>
-                        <div className="h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        {/* Progress bar */}
+                        <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all duration-700 ease-out"
                             style={{
                               width: `${pct}%`,
                               backgroundColor: captain.color,
-                              boxShadow: `0 0 8px ${captain.color}66`,
+                              boxShadow: `0 0 10px ${captain.color}55`,
                             }}
                           />
                         </div>
@@ -360,6 +374,12 @@ export default function App() {
                     </div>
                   );
                 })}
+
+              {captains.length === 0 && (
+                <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">
+                  No captains yet
+                </p>
+              )}
             </div>
           </div>
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Lock, ChevronRight, UserCheck, LogOut } from 'lucide-react';
+import { ArrowRight, Lock, Zap } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 // ── Team code entry ────────────────────────────────────────────────────────────
@@ -24,54 +24,78 @@ function TeamCodeScreen({ onSuccess }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50 dark:from-gray-950 dark:to-slate-900 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-xs animate-bounce-in">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500 shadow-lg shadow-emerald-500/30 mb-4">
-            <span className="text-3xl">🏃</span>
+    <div className="min-h-screen bg-gradient-hero flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      {/* Decorative radial glows */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full bg-emerald-500/8 blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 rounded-full bg-teal-500/6 blur-3xl pointer-events-none" />
+      <div className="absolute top-1/3 left-1/4 w-48 h-48 rounded-full bg-emerald-400/5 blur-2xl pointer-events-none" />
+
+      <div className="w-full max-w-xs animate-bounce-in relative z-10">
+
+        {/* Hero mark */}
+        <div className="text-center mb-10">
+          <div className="relative inline-flex items-center justify-center mb-5">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-brand shadow-brand-lg flex items-center justify-center">
+              <Zap size={36} className="text-white" fill="white" />
+            </div>
+            <div className="absolute inset-0 rounded-3xl bg-emerald-500/20 animate-ping" style={{ animationDuration: '2.5s' }} />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{settings.teamName}</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Enter your team access code</p>
+          <h1 className="text-3xl font-black text-white tracking-tight leading-tight mb-2">
+            {settings.teamName}
+          </h1>
+          <p className="text-emerald-400/80 text-sm font-medium">
+            Enter your team access code to continue
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="relative">
-            <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              autoFocus
-              type="text"
-              value={code}
-              onChange={e => { setCode(e.target.value); setError(''); }}
-              placeholder="Team access code"
-              autoCapitalize="none"
-              autoCorrect="off"
-              className={`w-full pl-10 pr-4 py-3.5 rounded-2xl border text-base font-medium focus:outline-none transition-all
-                ${error
-                  ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30'
-                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-emerald-400 dark:focus:border-emerald-500'}
-                text-gray-800 dark:text-gray-100 placeholder-gray-400`}
-            />
-          </div>
+        {/* Glass card */}
+        <div className="bg-white/10 dark:bg-white/5 backdrop-blur-xl rounded-3xl border border-white/20 dark:border-white/10 p-6 shadow-2xl">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="relative">
+              <Lock
+                size={16}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40"
+              />
+              <input
+                autoFocus
+                type="text"
+                value={code}
+                onChange={e => { setCode(e.target.value); setError(''); }}
+                placeholder="Team access code"
+                autoCapitalize="none"
+                autoCorrect="off"
+                className={`w-full pl-10 pr-4 py-4 rounded-2xl text-base font-semibold focus:outline-none transition-all
+                  bg-white/10 border placeholder-white/30 text-white
+                  focus:ring-2 focus:ring-emerald-400/60 focus:bg-white/15
+                  ${error
+                    ? 'border-red-400/60 focus:ring-red-400/40'
+                    : 'border-white/20 focus:border-emerald-400/60'
+                  }`}
+              />
+            </div>
 
-          {error && (
-            <p className="text-sm text-red-500 dark:text-red-400 text-center animate-fade-in">{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={!code.trim() || loading}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-emerald-500 text-white font-semibold text-base shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <span className="animate-pulse">Checking…</span>
-            ) : (
-              <>Join Team <ArrowRight size={18} /></>
+            {error && (
+              <div className="animate-fade-in bg-red-500/20 border border-red-400/30 rounded-xl px-3.5 py-2.5">
+                <p className="text-sm text-red-300 text-center font-medium">{error}</p>
+              </div>
             )}
-          </button>
-        </form>
 
-        <p className="text-center text-xs text-gray-400 dark:text-gray-600 mt-6">
-          Get the code from your coach
+            <button
+              type="submit"
+              disabled={!code.trim() || loading}
+              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl bg-gradient-brand text-white font-bold text-base shadow-brand-lg hover:opacity-90 active:scale-[0.97] transition-all disabled:opacity-40 disabled:cursor-not-allowed min-h-[56px]"
+            >
+              {loading ? (
+                <span className="animate-pulse">Verifying…</span>
+              ) : (
+                <>Join Team <ArrowRight size={18} /></>
+              )}
+            </button>
+          </form>
+        </div>
+
+        <p className="text-center text-xs text-white/30 mt-6 font-medium">
+          Get the code from your coach or captain
         </p>
       </div>
     </div>
@@ -81,57 +105,81 @@ function TeamCodeScreen({ onSuccess }) {
 // ── Captain selection ──────────────────────────────────────────────────────────
 function CaptainSelectScreen() {
   const { captains, selectCaptain, settings } = useApp();
-  const [hovered, setHovered] = useState(null);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50 dark:from-gray-950 dark:to-slate-900 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm animate-slide-up">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
 
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500 shadow-lg shadow-emerald-500/30 mb-4">
-            <span className="text-3xl">🏃</span>
+      {/* Header */}
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-5 py-4 pt-safe">
+        <div className="max-w-sm mx-auto flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-brand flex items-center justify-center shadow-brand flex-shrink-0">
+            <Zap size={16} className="text-white" fill="white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{settings.teamName}</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">Who are you?</p>
+          <div>
+            <h1 className="text-base font-extrabold text-gray-900 dark:text-white leading-tight tracking-tight">
+              {settings.teamName}
+            </h1>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium">
+              Select your name to continue
+            </p>
+          </div>
         </div>
+      </div>
 
-        {/* Captain list */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden mb-3">
-          {[...captains].sort((a, b) => a.name.localeCompare(b.name)).map((captain, idx) => (
-            <button
-              key={captain.id}
-              onClick={() => selectCaptain(captain.id)}
-              onMouseEnter={() => setHovered(captain.id)}
-              onMouseLeave={() => setHovered(null)}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 transition-colors
-                ${idx > 0 ? 'border-t border-gray-100 dark:border-gray-800' : ''}
-                ${hovered === captain.id ? 'bg-gray-50 dark:bg-gray-800/60' : 'bg-transparent'}
-                active:bg-gray-100 dark:active:bg-gray-800`}
-            >
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm"
-                style={{ backgroundColor: captain.color }}
-              >
-                {captain.name.charAt(0).toUpperCase()}
-              </div>
-              <span className="flex-1 text-left font-semibold text-gray-800 dark:text-gray-100">{captain.name}</span>
-              <div className="flex items-center gap-1 text-gray-300 dark:text-gray-600">
-                <UserCheck size={14} />
-                <ChevronRight size={13} />
-              </div>
-            </button>
-          ))}
+      {/* Body */}
+      <div className="flex-1 px-4 py-6 max-w-sm mx-auto w-full">
+        <div className="animate-slide-up">
+          <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 text-center">
+            Who are you?
+          </p>
 
-          {captains.length === 0 && (
-            <div className="px-4 py-8 text-center text-gray-400 text-sm">
-              <div className="animate-pulse">Loading team…</div>
+          {captains.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                <span className="text-2xl animate-pulse">🏃</span>
+              </div>
+              <p className="text-sm text-gray-400 dark:text-gray-500">Loading team…</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {[...captains].sort((a, b) => a.name.localeCompare(b.name)).map((captain) => (
+                <button
+                  key={captain.id}
+                  onClick={() => selectCaptain(captain.id)}
+                  className="group relative flex flex-col items-center gap-3 p-5 bg-white dark:bg-gray-900 rounded-3xl shadow-card border border-gray-100 dark:border-gray-800 hover:border-transparent hover:shadow-card-lg active:scale-[0.95] transition-all duration-200 select-none min-h-[130px] justify-center"
+                  style={{
+                    '--cap-color': captain.color,
+                  }}
+                >
+                  {/* Hover glow border */}
+                  <div
+                    className="absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
+                    style={{
+                      boxShadow: `0 0 0 2px ${captain.color}55, 0 8px 30px ${captain.color}22`,
+                    }}
+                  />
+
+                  {/* Avatar */}
+                  <div
+                    className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-black shadow-sm transition-transform duration-200 group-hover:scale-105"
+                    style={{ backgroundColor: captain.color }}
+                  >
+                    {captain.name.charAt(0).toUpperCase()}
+                  </div>
+
+                  {/* Name */}
+                  <span className="text-sm font-bold text-gray-800 dark:text-gray-100 text-center leading-snug">
+                    {captain.name}
+                  </span>
+                </button>
+              ))}
             </div>
           )}
-        </div>
 
-        <p className="text-center text-xs text-gray-400 dark:text-gray-600 mt-4">
-          Your name is remembered for next time
-        </p>
+          <p className="text-center text-xs text-gray-400 dark:text-gray-600 mt-6 font-medium">
+            Your selection is remembered for next time
+          </p>
+        </div>
       </div>
     </div>
   );
