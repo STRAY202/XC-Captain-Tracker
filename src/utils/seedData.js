@@ -5,13 +5,12 @@ const CAPTAIN_COLORS = [
   '#ef4444', '#8b5cf6', '#ec4899',
 ];
 
+// Alphabetical: Austin, Cash, Duncan, Harrison
 const DEFAULT_CAPTAINS = [
-  { id: 'cap_alex',   name: 'Alex',   color: CAPTAIN_COLORS[0] },
-  { id: 'cap_jordan', name: 'Jordan', color: CAPTAIN_COLORS[1] },
-  { id: 'cap_sam',    name: 'Sam',    color: CAPTAIN_COLORS[2] },
-  { id: 'cap_taylor', name: 'Taylor', color: CAPTAIN_COLORS[3] },
-  { id: 'cap_riley',  name: 'Riley',  color: CAPTAIN_COLORS[4] },
-  { id: 'cap_casey',  name: 'Casey',  color: CAPTAIN_COLORS[5] },
+  { id: 'cap_austin',   name: 'Austin',   color: CAPTAIN_COLORS[0] },
+  { id: 'cap_cash',     name: 'Cash',     color: CAPTAIN_COLORS[1] },
+  { id: 'cap_duncan',   name: 'Duncan',   color: CAPTAIN_COLORS[2] },
+  { id: 'cap_harrison', name: 'Harrison', color: CAPTAIN_COLORS[3] },
 ];
 
 // Workout rotation for Mon–Fri
@@ -57,16 +56,16 @@ export function generateSeedData(startDate = '2026-06-15') {
   // Attendance patterns — who shows up on which days
   // Each day: pick 1–4 captains from the roster
   const patterns = [
-    ['cap_alex', 'cap_jordan'],
-    ['cap_jordan', 'cap_sam', 'cap_taylor'],
-    ['cap_alex', 'cap_riley', 'cap_casey'],
-    ['cap_sam'],
-    ['cap_alex', 'cap_jordan', 'cap_taylor'],
-    ['cap_riley', 'cap_casey', 'cap_sam'],
-    ['cap_alex', 'cap_jordan', 'cap_casey'],
-    ['cap_taylor', 'cap_riley'],
-    ['cap_alex', 'cap_sam', 'cap_riley', 'cap_casey'],
-    ['cap_jordan', 'cap_taylor', 'cap_alex'],
+    ['cap_austin', 'cap_cash'],
+    ['cap_cash', 'cap_duncan', 'cap_harrison'],
+    ['cap_austin', 'cap_duncan'],
+    ['cap_harrison'],
+    ['cap_austin', 'cap_cash', 'cap_harrison'],
+    ['cap_duncan', 'cap_harrison', 'cap_cash'],
+    ['cap_austin', 'cap_cash'],
+    ['cap_harrison', 'cap_duncan'],
+    ['cap_austin', 'cap_cash', 'cap_duncan', 'cap_harrison'],
+    ['cap_cash', 'cap_harrison', 'cap_austin'],
   ];
 
   for (const { offset, weekIdx, dayIdx, override } of allDays) {

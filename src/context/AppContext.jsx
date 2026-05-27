@@ -1,7 +1,33 @@
 import React, {
   createContext, useContext, useState, useEffect,
-  useCallback, useRef
+  useCallback, useRef, useMemo
 } from 'react';
+
+// ── Safe localStorage (iOS Safari private mode & storage quota) ───────────────
+function safeGet(key) {
+  try { return window.localStorage.getItem(key); }
+  catch (e) { console.warn('[storage] read failed:', key, e); return null; }
+}
+function safeSet(key, value) {
+  try { window.localStorage.setItem(key, String(value)); }
+  catch (e) { console.warn('[storage] write failed:', key, e); }
+}
+function safeRemove(key) {
+  try { window.localStorage.removeItem(key); }
+  catch (e) { console.warn('[storage] remove failed:', key, e); }
+}
+function safeSessionGet(key) {
+  try { return window.sessionStorage.getItem(key); }
+  catch { return null; }
+}
+function safeSessionSet(key, value) {
+  try { window.sessionStorage.setItem(key, String(value)); }
+  catch {}
+}
+function safeSessionRemove(key) {
+  try { window.sessionStorage.removeItem(key); }
+  catch {}
+}
 import {
   signInAnonymously,
   onAuthStateChanged,
@@ -33,7 +59,7 @@ const STORAGE = {
   CAPTAIN_ID:    'xc-captain',
   ADMIN:         'xc-admin',
   DARK_MODE:     'xc-dark',
-  DEMO:          'xc-demo-v2',      // localStorage key for demo mode data
+  DEMO:          'xc-demo-v3',   // bumped → clears stale data with old captain names
 };
 
 // ── Demo-mode helpers ─────────────────────────────────────────────────────────
@@ -74,20 +100,20 @@ export function AppProvider({ children }) {
 
   /* ── Access ───────────────────────────────────────────────────────────── */
   const [teamVerified, setTeamVerified] = useState(
-    () => demoMode || localStorage.getItem(STORAGE.TEAM_VERIFIED) === 'true'
+    () => demoMode || safeGet(STORAGE.TEAM_VERIFIED) === 'true'
   );
   const [isAdmin, setIsAdmin] = useState(
-    () => sessionStorage.getItem(STORAGE.ADMIN) === 'true'
+    () => safeSessionGet(STORAGE.ADMIN) === 'true'
   );
 
   /* ── Captain ──────────────────────────────────────────────────────────── */
   const [currentCaptainId, setCurrentCaptainId] = useState(
-    () => localStorage.getItem(STORAGE.CAPTAIN_ID) || null
+    () => safeGet(STORAGE.CAPTAIN_ID) || null
   );
 
   /* ── Dark mode ────────────────────────────────────────────────────────── */
   const [darkMode, setDarkMode] = useState(
-    () => localStorage.getItem(STORAGE.DARK_MODE) === 'true'
+    () => safeGet(STORAGE.DARK_MODE) === 'true'
   );
 
   /* ── Data ─────────────────────────────────────────────────────────────── */
@@ -96,12 +122,13 @@ export function AppProvider({ children }) {
   const [attendance,  setAttendance]  = useState({});
   const [dayDetails,  setDayDetails]  = useState({});
   const [dataLoading, setDataLoading] = useState(true);
+  const [loadError,   setLoadError]   = useState(false);
 
   const initializing = useRef(false);
 
   /* ── Dark mode sync ───────────────────────────────────────────────────── */
   useEffect(() => {
-    localStorage.setItem(STORAGE.DARK_MODE, darkMode);
+    safeSet(STORAGE.DARK_MODE, darkMode);
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
@@ -132,6 +159,22 @@ export function AppProvider({ children }) {
     setDataLoading(false);
   }, [demoMode]);
 
+  /* ── Firebase timeout — clears dataLoading if Firebase never responds ──── */
+  useEffect(() => {
+    if (demoMode || !dataLoading) return;
+    const t = setTimeout(() => {
+      console.error('[AppContext] Firebase load timed out after 10s — falling back to demo data');
+      const seed = generateSeedData(DEFAULT_SETTINGS.startDate);
+      setCaptains(seed.captains);
+      setAttendance(seed.attendance);
+      setDayDetails(seed.dayDetails);
+      setDataLoading(false);
+      setLoadError(true);
+    }, 10000);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoMode]);
+
   /* ── Firebase Anonymous Auth ──────────────────────────────────────────── */
   useEffect(() => {
     if (demoMode || !auth) {
@@ -146,11 +189,19 @@ export function AppProvider({ children }) {
           const result = await signInAnonymously(auth);
           setFirebaseUser(result.user);
         } catch (err) {
-          console.error('Anonymous sign-in failed:', err);
+          console.error('[AppContext] Anonymous sign-in failed:', err);
           setAuthLoading(false);
+          setDataLoading(false);  // won't get Firestore listeners without auth
+          setLoadError(true);
+          return;
         }
       }
       setAuthLoading(false);
+    }, (err) => {
+      console.error('[AppContext] onAuthStateChanged error:', err);
+      setAuthLoading(false);
+      setDataLoading(false);
+      setLoadError(true);
     });
     return unsub;
   }, [demoMode]);
@@ -217,11 +268,11 @@ export function AppProvider({ children }) {
 
   /* ── Team/Admin verification ──────────────────────────────────────────── */
   const verifyTeamCode = useCallback(async (code) => {
-    if (demoMode) return true; // demo: no code needed
+    if (demoMode) return true;
     const correct = code.trim().toLowerCase() === (settings.teamCode || '').toLowerCase();
     if (correct) {
       setTeamVerified(true);
-      localStorage.setItem(STORAGE.TEAM_VERIFIED, 'true');
+      safeSet(STORAGE.TEAM_VERIFIED, 'true');
     }
     return correct;
   }, [demoMode, settings.teamCode]);
@@ -230,25 +281,27 @@ export function AppProvider({ children }) {
     const correct = code.trim() === settings.adminCode;
     if (correct) {
       setIsAdmin(true);
-      sessionStorage.setItem(STORAGE.ADMIN, 'true');
+      safeSessionSet(STORAGE.ADMIN, 'true');
     }
     return correct;
   }, [settings.adminCode]);
 
   const logoutAdmin = useCallback(() => {
     setIsAdmin(false);
-    sessionStorage.removeItem(STORAGE.ADMIN);
+    safeSessionRemove(STORAGE.ADMIN);
   }, []);
 
   /* ── Captain selection ────────────────────────────────────────────────── */
   const selectCaptain = useCallback((id) => {
+    console.log('[AppContext] Captain selected:', id);
     setCurrentCaptainId(id);
-    localStorage.setItem(STORAGE.CAPTAIN_ID, id);
+    safeSet(STORAGE.CAPTAIN_ID, id);
   }, []);
 
   const deselectCaptain = useCallback(() => {
+    console.log('[AppContext] Captain deselected');
     setCurrentCaptainId(null);
-    localStorage.removeItem(STORAGE.CAPTAIN_ID);
+    safeRemove(STORAGE.CAPTAIN_ID);
   }, []);
 
   /* ── Attendance ───────────────────────────────────────────────────────── */
@@ -422,7 +475,7 @@ export function AppProvider({ children }) {
   /* ── Expose ───────────────────────────────────────────────────────────── */
   const value = {
     isFirebaseConfigured, demoMode,
-    authLoading, dataLoading, firebaseUser,
+    authLoading, dataLoading, loadError, firebaseUser,
     teamVerified, isAdmin, verifyTeamCode, verifyAdminCode, logoutAdmin,
     currentCaptainId, selectCaptain, deselectCaptain,
     currentCaptain: captains.find(c => c.id === currentCaptainId) || null,

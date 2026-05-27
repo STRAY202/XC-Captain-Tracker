@@ -97,7 +97,7 @@ function CaptainSelectScreen() {
 
         {/* Captain list */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden mb-3">
-          {captains.map((captain, idx) => (
+          {[...captains].sort((a, b) => a.name.localeCompare(b.name)).map((captain, idx) => (
             <button
               key={captain.id}
               onClick={() => selectCaptain(captain.id)}

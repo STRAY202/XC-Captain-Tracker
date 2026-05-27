@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Moon, Sun, Settings, LogOut, ChevronDown, ChevronUp, Database } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Moon, Sun, Settings, LogOut, ChevronDown, ChevronUp, Database, RefreshCw } from 'lucide-react';
 import { useApp } from './context/AppContext';
 import { generateSchedule, today, fromDateStr } from './utils/dates';
 import AccessGate from './components/AccessGate';
@@ -9,36 +9,38 @@ import AdminPanel from './components/AdminPanel';
 
 export default function App() {
   const {
-    demoMode, authLoading, dataLoading,
-    settings, captains, dayDetails, attendance,
+    demoMode, authLoading, dataLoading, loadError,
+    settings, captains, dayDetails,
     currentCaptainId, currentCaptain, deselectCaptain,
-    teamVerified, darkMode, toggleDarkMode,
+    darkMode, toggleDarkMode,
     getCaptainStats,
   } = useApp();
 
+  // ── All hooks must be called unconditionally before any conditional return ──
   const [showAdmin,    setShowAdmin]    = useState(false);
   const [showAllWeeks, setShowAllWeeks] = useState(false);
+  const [timedOut,     setTimedOut]     = useState(false);
 
-  // ── Routing guards ─────────────────────────────────────────────────────────
+  const isLoading = authLoading || (dataLoading && captains.length === 0);
 
-  // 1. Auth or data still loading → spinner
-  if (authLoading || (dataLoading && captains.length === 0)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <div className="text-center animate-fade-in">
-          <div className="text-4xl mb-4">🏃</div>
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400 animate-pulse">
-            Loading team…
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // Show retry UI if loading takes more than 8 seconds
+  useEffect(() => {
+    if (!isLoading) { setTimedOut(false); return; }
+    const t = setTimeout(() => setTimedOut(true), 8000);
+    return () => clearTimeout(t);
+  }, [isLoading]);
 
-  // 2. No captain selected → access gate (also handles team code if Firebase mode)
-  if (!currentCaptainId) return <AccessGate />;
+  // Deselect stale captain IDs (e.g. after captain list changes)
+  useEffect(() => {
+    if (dataLoading || !captains.length || !currentCaptainId) return;
+    if (currentCaptainId === 'admin') return;
+    const found = captains.some(c => c.id === currentCaptainId);
+    if (!found) {
+      console.warn('[App] Stale captain ID, deselecting:', currentCaptainId);
+      deselectCaptain();
+    }
+  }, [dataLoading, captains, currentCaptainId, deselectCaptain]);
 
-  // ── Schedule generation ────────────────────────────────────────────────────
   const weeks = useMemo(() =>
     generateSchedule(settings.startDate, settings.numWeeks, settings.practiceDays),
     [settings.startDate, settings.numWeeks, settings.practiceDays]
@@ -62,11 +64,53 @@ export default function App() {
     return weeks.slice(s, e + 1);
   }, [weeks, currentWeekIndex, showAllWeeks]);
 
-  // ── Stats for bar chart ────────────────────────────────────────────────────
-  const captainStats = getCaptainStats();
-  const totalActiveDays = weeks
-    .flatMap(w => w.days)
-    .filter(d => !dayDetails[d]?.cancelled).length;
+  const captainStats = useMemo(() => getCaptainStats(), [getCaptainStats]);
+
+  const totalActiveDays = useMemo(() =>
+    weeks.flatMap(w => w.days).filter(d => !dayDetails[d]?.cancelled).length,
+    [weeks, dayDetails]
+  );
+
+  // ── Routing guards — after all hooks ────────────────────────────────────────
+
+  if (timedOut || loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-6">
+        <div className="text-center animate-fade-in max-w-xs">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2">
+            {loadError ? 'Connection Error' : 'Taking too long…'}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+            {loadError
+              ? 'Could not connect to the server. Check your connection and try again.'
+              : 'The app is taking longer than expected to load.'}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="flex items-center gap-2 mx-auto px-5 py-3 rounded-2xl bg-emerald-500 text-white font-semibold text-sm shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 active:scale-95 transition-all"
+          >
+            <RefreshCw size={15} /> Reload App
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <div className="text-center animate-fade-in">
+          <div className="text-4xl mb-4">🏃</div>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400 animate-pulse">
+            Loading team…
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentCaptainId) return <AccessGate />;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -147,7 +191,7 @@ export default function App() {
             <Database size={12} className="flex-shrink-0" />
             <span>
               <strong>Demo mode</strong> — data saves to this device only.
-              {' '}<a href="https://github.com" className="underline opacity-70">Add Firebase</a> for real-time sync across all phones.
+              {' '}<a href="https://firebase.google.com" className="underline opacity-70">Add Firebase</a> for real-time sync across all phones.
             </span>
           </div>
         )}
@@ -201,12 +245,13 @@ export default function App() {
             Captain Attendance
           </h3>
           <div className="space-y-3">
-            {[...captains]
-              .sort((a, b) => (captainStats[b.id] || 0) - (captainStats[a.id] || 0))
-              .map(captain => {
-                const count = captainStats[captain.id] || 0;
-                const pct   = totalActiveDays > 0 ? Math.round((count / totalActiveDays) * 100) : 0;
-                const isMe  = captain.id === currentCaptainId;
+            {[...captainStats ? Object.keys(captainStats) : []]
+              .map(id => ({ captain: captains.find(c => c.id === id), count: captainStats[id] || 0 }))
+              .filter(({ captain }) => captain)
+              .sort((a, b) => b.count - a.count)
+              .map(({ captain, count }) => {
+                const pct  = totalActiveDays > 0 ? Math.round((count / totalActiveDays) * 100) : 0;
+                const isMe = captain.id === currentCaptainId;
                 return (
                   <div key={captain.id} className="flex items-center gap-3">
                     <div
