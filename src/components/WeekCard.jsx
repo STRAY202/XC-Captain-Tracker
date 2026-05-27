@@ -1,103 +1,98 @@
-import { useMemo, useRef, useEffect } from 'react';
-import { CheckCircle2, XCircle, Clock, Ban, Star } from 'lucide-react';
-import { DAYS_SHORT, formatShort, isToday, isPast, fromDateStr, today } from '../utils/dates';
+import { useRef, useEffect, useState } from 'react';
+import { CheckCircle2, XCircle, Clock, Ban, Star, Info } from 'lucide-react';
+import { useApp } from '../context/AppContext';
+import { DAYS_SHORT, formatShort, isToday, isPast, fromDateStr } from '../utils/dates';
+import { getWorkoutType } from '../utils/workoutTypes';
+import DayModal from './DayModal';
 
-function DayButton({
-  dateStr,
-  dayIndex,
-  currentCaptainId,
-  captains,
-  attendingIds,
-  override,
-  onToggle,
-  minCaptainsPerDay,
-  defaultTime,
-  isCurrentUser,
-}) {
-  const attending = attendingIds || [];
-  const isCancelled = override?.cancelled;
-  const isOptional = override?.optional;
-  const dayTime = override?.customTime || defaultTime;
-  const attendingCaptains = captains.filter(c => attending.includes(c.id));
-  const myAttending = attending.includes(currentCaptainId);
-  const covered = attending.length >= minCaptainsPerDay;
-  const todayDate = isToday(dateStr);
-  const past = isPast(dateStr);
+// ── Individual day button ──────────────────────────────────────────────────────
+function DayButton({ dateStr, dayIndex, onOpenModal }) {
+  const {
+    captains, currentCaptainId, attendance, dayDetails,
+    settings, toggleAttendance, isCaptainAttending,
+  } = useApp();
 
-  const handleClick = () => {
-    if (!isCancelled && currentCaptainId && currentCaptainId !== 'admin') {
-      onToggle(dateStr, currentCaptainId);
+  const override   = dayDetails[dateStr] || {};
+  const isCancelled = override.cancelled;
+  const isOptional  = override.optional;
+  const wt          = getWorkoutType(override.workoutType);
+  const todayDate   = isToday(dateStr);
+  const past        = isPast(dateStr);
+
+  const attendingCaptains = captains.filter(c => attendance[dateStr]?.[c.id] === true);
+  const count       = attendingCaptains.length;
+  const myAttending = isCaptainAttending(dateStr, currentCaptainId);
+  const covered     = count >= settings.minCaptainsPerDay;
+  const isAdmin     = currentCaptainId === 'admin';
+
+  const handleTap = (e) => {
+    e.stopPropagation();
+    if (isCancelled) return;
+    if (!isAdmin && currentCaptainId) {
+      toggleAttendance(dateStr, currentCaptainId);
     }
   };
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-center gap-0.5">
       {/* Day label */}
-      <span className={`text-xs font-semibold uppercase tracking-wide ${
-        todayDate
-          ? 'text-blue-500 dark:text-blue-400'
-          : 'text-gray-400 dark:text-gray-500'
+      <span className={`text-[10px] font-bold uppercase tracking-widest ${
+        todayDate ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'
       }`}>
         {DAYS_SHORT[dayIndex]}
       </span>
-
-      {/* Date */}
-      <span className={`text-xs ${
-        todayDate
-          ? 'text-blue-500 dark:text-blue-400 font-bold'
-          : 'text-gray-400 dark:text-gray-500'
+      {/* Date number */}
+      <span className={`text-[11px] font-semibold ${
+        todayDate ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'
       }`}>
         {formatShort(dateStr).split(' ')[1]}
       </span>
 
-      {/* Button */}
+      {/* Main button */}
       <button
-        onClick={handleClick}
-        disabled={!!isCancelled || currentCaptainId === 'admin'}
+        onClick={handleTap}
+        disabled={!!isCancelled || !currentCaptainId}
         className={`
-          w-full aspect-square min-h-[52px] max-h-[64px] rounded-xl flex flex-col items-center justify-center gap-0.5
-          transition-all duration-200 active:scale-95 select-none
+          relative w-full aspect-square min-h-[54px] max-h-[66px] rounded-xl flex flex-col items-center justify-center gap-0.5
+          transition-all duration-200 active:scale-90 select-none
           ${isCancelled
-            ? 'bg-gray-100 dark:bg-gray-800 opacity-40 cursor-not-allowed'
-            : currentCaptainId === 'admin'
-            ? 'cursor-default'
-            : 'cursor-pointer'
-          }
-          ${!isCancelled && myAttending
-            ? 'bg-emerald-500 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400 dark:ring-emerald-600'
-            : !isCancelled
-            ? `bg-white dark:bg-gray-800 border ${
+            ? 'bg-gray-100 dark:bg-gray-800/60 cursor-not-allowed opacity-40'
+            : myAttending
+            ? 'cursor-pointer shadow-lg'
+            : `bg-white dark:bg-gray-800 ${
                 covered
-                  ? 'border-emerald-300 dark:border-emerald-700'
+                  ? 'border-2 border-emerald-300 dark:border-emerald-700'
                   : past
-                  ? 'border-gray-200 dark:border-gray-700'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-500'
-              }`
-            : ''
+                  ? 'border border-gray-200 dark:border-gray-700'
+                  : 'border border-gray-200 dark:border-gray-700 hover:border-emerald-300 dark:hover:border-emerald-600'
+              } cursor-pointer`
           }
+          ${myAttending && !isCancelled ? 'ring-2 ring-white dark:ring-gray-950' : ''}
           ${todayDate && !isCancelled ? 'ring-2 ring-blue-400/50 dark:ring-blue-500/40' : ''}
         `}
+        style={myAttending && !isCancelled ? { backgroundColor: wt.color, boxShadow: `0 4px 14px ${wt.color}44` } : {}}
       >
+        {/* Workout emoji badge (top-right) */}
+        {!isCancelled && override.workoutType && (
+          <span className="absolute -top-1 -right-1 text-[11px] leading-none z-10">{wt.emoji}</span>
+        )}
+
         {isCancelled ? (
-          <Ban size={16} className="text-gray-400" />
+          <Ban size={15} className="text-gray-400" />
         ) : (
           <>
-            {/* Count bubble */}
-            <span className={`text-lg font-bold leading-none ${
+            <span className={`text-lg font-extrabold leading-none ${
               myAttending ? 'text-white' : covered ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'
             }`}>
-              {attending.length}
+              {count}
             </span>
-
-            {/* Mini avatar strip */}
             {attendingCaptains.length > 0 && (
-              <div className="flex -space-x-1">
+              <div className="flex -space-x-0.5">
                 {attendingCaptains.slice(0, 3).map(c => (
                   <div
                     key={c.id}
-                    className="w-2.5 h-2.5 rounded-full border border-white dark:border-gray-800 flex-shrink-0"
+                    className="w-2.5 h-2.5 rounded-full border border-white dark:border-gray-800"
                     style={{ backgroundColor: c.color }}
-                    title={c.name}
                   />
                 ))}
               </div>
@@ -106,166 +101,149 @@ function DayButton({
         )}
       </button>
 
-      {/* Optional tag */}
+      {/* Info button (opens modal) */}
+      <button
+        onClick={() => onOpenModal(dateStr)}
+        className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors mt-0.5"
+        title="Day details"
+      >
+        <Info size={11} className={override.workoutType ? 'text-gray-500 dark:text-gray-400' : 'text-gray-300 dark:text-gray-600'} />
+      </button>
+
+      {/* Tags */}
       {isOptional && !isCancelled && (
-        <span className="text-[9px] text-amber-500 font-medium uppercase tracking-wide">opt</span>
+        <span className="text-[9px] text-amber-500 font-bold uppercase tracking-wide -mt-0.5">opt</span>
       )}
-      {/* Cancelled tag */}
       {isCancelled && (
-        <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wide">off</span>
+        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wide -mt-0.5">off</span>
       )}
     </div>
   );
 }
 
-export default function WeekCard({
-  week,
-  captains,
-  currentCaptainId,
-  attendance,
-  dayOverrides,
-  settings,
-  isCurrentWeek,
-  getWeekCoverage,
-  onToggle,
-  weekIndex,
-}) {
+// ── Week card ──────────────────────────────────────────────────────────────────
+export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
   const cardRef = useRef(null);
+  const [modalDate, setModalDate] = useState(null);
+  const { getWeekStats, captains, attendance, dayDetails, settings, currentCaptainId } = useApp();
 
-  const { coveredCount, totalActive } = getWeekCoverage(week.days);
-  const isCovered = coveredCount >= settings.minCoveredDays;
-  const todayStr = today();
+  const { coveredCount, totalActive, isCovered, isPartial } = getWeekStats(week.days);
 
-  // Scroll into view if current week
+  // Scroll current week into view
   useEffect(() => {
     if (isCurrentWeek && cardRef.current) {
-      setTimeout(() => {
-        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 400);
+      const timer = setTimeout(() => {
+        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [isCurrentWeek]);
 
-  // Format week range header
-  const firstDay = week.days[0];
-  const lastDay = week.days[week.days.length - 1];
-  const firstDate = fromDateStr(firstDay);
-  const lastDate = fromDateStr(lastDay);
-  const weekRangeStr = `${firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${lastDate.toLocaleDateString('en-US', { day: 'numeric' })}`;
+  const firstDate = fromDateStr(week.days[0]);
+  const lastDate  = fromDateStr(week.days[week.days.length - 1]);
+  const range = `${firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${lastDate.toLocaleDateString('en-US', { day: 'numeric' })}`;
 
-  // My days this week
-  const myDaysCount = week.days.filter(d => (attendance[d] || []).includes(currentCaptainId)).length;
+  // My days count this week
+  const myDays = week.days.filter(d => attendance[d]?.[currentCaptainId] === true).length;
 
-  const statusColor = isCovered
-    ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'
-    : 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800';
+  // Card border/bg
+  let cardClass = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800';
+  let badgeClass = 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400';
+  if (isCovered) {
+    cardClass = 'bg-emerald-50 dark:bg-emerald-950/20 border-2 border-emerald-200 dark:border-emerald-800';
+    badgeClass = 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300';
+  } else if (isPartial) {
+    cardClass = 'bg-amber-50 dark:bg-amber-950/20 border-2 border-amber-200 dark:border-amber-800';
+    badgeClass = 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300';
+  } else if (coveredCount === 0 && totalActive > 0) {
+    cardClass = 'bg-red-50 dark:bg-red-950/20 border-2 border-red-200 dark:border-red-800';
+    badgeClass = 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400';
+  }
 
-  const statusRing = isCurrentWeek ? 'ring-4 ring-blue-400/30 dark:ring-blue-500/30' : '';
+  const ringClass = isCurrentWeek ? 'ring-4 ring-blue-400/30 dark:ring-blue-500/30' : '';
 
   return (
-    <div
-      ref={cardRef}
-      className={`rounded-2xl border-2 p-4 transition-all duration-300 ${statusColor} ${statusRing}`}
-      style={{ animationDelay: `${weekIndex * 40}ms` }}
-    >
-      {/* Week header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-            Week {weekIndex + 1}
-          </span>
-          {isCurrentWeek && (
-            <span className="text-[10px] font-bold bg-blue-500 text-white px-2 py-0.5 rounded-full uppercase tracking-wide animate-pulse">
-              Now
+    <>
+      <div
+        ref={cardRef}
+        className={`rounded-2xl p-4 transition-all duration-300 ${cardClass} ${ringClass}`}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+              Wk {weekIndex + 1}
             </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Time */}
-          <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
-            <Clock size={10} />
-            {settings.defaultTime}
-          </span>
-
-          {/* Coverage badge */}
-          <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-            isCovered
-              ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
-              : 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'
-          }`}>
-            {isCovered
-              ? <CheckCircle2 size={10} />
-              : <XCircle size={10} />
-            }
-            {coveredCount}/{settings.minCoveredDays}
+            {isCurrentWeek && (
+              <span className="text-[10px] font-extrabold bg-blue-500 text-white px-2 py-0.5 rounded-full uppercase tracking-wide animate-pulse">
+                Now
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500">
+              <Clock size={9} />
+              {settings.defaultTime}
+            </span>
+            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${badgeClass}`}>
+              {isCovered ? <CheckCircle2 size={10} /> : isPartial ? <Star size={10} /> : <XCircle size={10} />}
+              {coveredCount}/{settings.minCoveredDays}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Date range */}
-      <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">{weekRangeStr}</p>
+        {/* Date range */}
+        <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-3">{range}</p>
 
-      {/* Day buttons grid */}
-      <div className={`grid gap-2 ${
-        week.days.length <= 5 ? 'grid-cols-5' : 'grid-cols-6'
-      }`}>
-        {week.days.map((dateStr, di) => {
-          const override = dayOverrides[dateStr];
-          return (
+        {/* Day buttons */}
+        <div className={`grid gap-1.5 ${week.days.length <= 5 ? 'grid-cols-5' : 'grid-cols-6'}`}>
+          {week.days.map((dateStr, di) => (
             <DayButton
               key={dateStr}
               dateStr={dateStr}
               dayIndex={di}
-              currentCaptainId={currentCaptainId}
-              captains={captains}
-              attendingIds={attendance[dateStr] || []}
-              override={override}
-              onToggle={onToggle}
-              minCaptainsPerDay={settings.minCaptainsPerDay}
-              defaultTime={settings.defaultTime}
+              onOpenModal={setModalDate}
             />
-          );
-        })}
-      </div>
-
-      {/* My attendance hint */}
-      {currentCaptainId && currentCaptainId !== 'admin' && myDaysCount > 0 && (
-        <div className="mt-3 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-          <Star size={10} className="text-emerald-500" />
-          <span>You're attending {myDaysCount} day{myDaysCount !== 1 ? 's' : ''} this week</span>
+          ))}
         </div>
-      )}
 
-      {/* Attending captains summary */}
-      {captains.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1">
+        {/* My attendance hint */}
+        {myDays > 0 && currentCaptainId && currentCaptainId !== 'admin' && (
+          <div className="mt-2.5 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <Star size={10} className="text-emerald-500" />
+            <span>You're attending {myDays} day{myDays !== 1 ? 's' : ''} this week</span>
+          </div>
+        )}
+
+        {/* Attending captain chips */}
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
           {captains.map(captain => {
             const count = week.days.filter(d =>
-              (attendance[d] || []).includes(captain.id) && !dayOverrides[d]?.cancelled
+              attendance[d]?.[captain.id] === true && !dayDetails[d]?.cancelled
             ).length;
             if (count === 0) return null;
             const isMe = captain.id === currentCaptainId;
             return (
               <span
                 key={captain.id}
-                className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${
-                  isMe
-                    ? 'text-white'
-                    : 'text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-gray-800/60'
+                className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold ${
+                  isMe ? 'text-white shadow-sm' : 'bg-white/70 dark:bg-gray-800/70 text-gray-600 dark:text-gray-300'
                 }`}
                 style={isMe ? { backgroundColor: captain.color } : {}}
               >
-                <span
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: captain.color }}
-                />
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: captain.color }} />
                 {captain.name.split(' ')[0]}
-                <span className="opacity-70">×{count}</span>
+                <span className="opacity-60">×{count}</span>
               </span>
             );
           })}
         </div>
+      </div>
+
+      {/* Day detail modal */}
+      {modalDate && (
+        <DayModal dateStr={modalDate} onClose={() => setModalDate(null)} />
       )}
-    </div>
+    </>
   );
 }
