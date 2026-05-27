@@ -1,45 +1,58 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..900;1,14..32,300..900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  * {
-    -webkit-tap-highlight-color: transparent;
-  }
+  * { -webkit-tap-highlight-color: transparent; }
+  html { scroll-behavior: smooth; }
   body {
     @apply font-sans antialiased;
     margin: 0;
+    overscroll-behavior-y: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-  #root {
-    width: 100%;
-  }
+  #root { width: 100%; }
 }
 
 @layer components {
-  .day-btn {
-    @apply relative flex flex-col items-center justify-center rounded-xl transition-all duration-200 active:scale-95 select-none cursor-pointer;
+  .btn-primary {
+    @apply flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl
+      bg-emerald-500 text-white font-bold text-sm shadow-brand
+      hover:bg-emerald-600 active:scale-[0.96] transition-all duration-150 select-none cursor-pointer;
   }
-  .week-card {
-    @apply rounded-2xl p-4 transition-all duration-300;
+  .btn-secondary {
+    @apply flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl
+      bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-semibold text-sm
+      hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-[0.96]
+      transition-all duration-150 select-none cursor-pointer;
   }
-  .chip {
-    @apply inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer select-none active:scale-95;
+  .card {
+    @apply bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05);
+  }
+  .field-input {
+    @apply w-full px-3.5 py-3 rounded-xl border border-gray-200 dark:border-gray-700
+      bg-white dark:bg-gray-800/80 text-gray-900 dark:text-gray-100 text-sm
+      placeholder-gray-400 dark:placeholder-gray-500
+      focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:focus:ring-emerald-500/50
+      transition-all duration-150;
   }
 }
 
-::-webkit-scrollbar {
-  width: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 9999px;
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+  }
+  .pb-safe { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+  .pt-safe { padding-top: max(1rem, env(safe-area-inset-top)); }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
 
-html {
-  scroll-behavior: smooth;
-}
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(156,163,175,0.3); border-radius: 9999px; }
