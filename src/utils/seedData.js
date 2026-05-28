@@ -17,11 +17,11 @@ export function generateSeedData(startDate = '2026-06-15') {
   const dayDetails = {};
   const attendance = {};
 
-  const WEEK1_LOCATIONS = ['Memorial', 'Cutler Park', 'Memorial', 'Cutler Park', 'Memorial'];
-  const WEEK2_LOCATIONS = ['Cutler Park', 'Memorial', 'Cutler Park', 'Memorial', 'Cutler Park'];
+  const WEEK1_LOCATIONS = ['Memorial', 'Cutler Park', 'Memorial', 'Cutler Park', 'Memorial', 'Cutler Park'];
+  const WEEK2_LOCATIONS = ['Cutler Park', 'Memorial', 'Cutler Park', 'Memorial', 'Cutler Park', 'Memorial'];
 
   for (let w = 0; w < 2; w++) {
-    for (let d = 0; d < 5; d++) {
+    for (let d = 0; d < 6; d++) {
       const offset = w * 7 + d;
       const dateStr = addDays(startDate, offset);
       const locations = w === 0 ? WEEK1_LOCATIONS : WEEK2_LOCATIONS;
