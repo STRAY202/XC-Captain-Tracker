@@ -2,6 +2,8 @@ import React, {
   createContext, useContext, useState, useEffect,
   useCallback, useRef, useMemo
 } from 'react';
+import { supabase, isSupabaseConfigured } from '../supabase';
+import { CAPTAIN_COLORS } from '../utils/seedData';
 
 // ── Safe localStorage (iOS Safari private mode & storage quota) ───────────────
 function safeGet(key) {
@@ -28,17 +30,6 @@ function safeSessionRemove(key) {
   try { window.sessionStorage.removeItem(key); }
   catch {}
 }
-import {
-  signInAnonymously,
-  onAuthStateChanged,
-} from 'firebase/auth';
-import {
-  doc, collection, onSnapshot, setDoc, updateDoc,
-  deleteDoc, serverTimestamp, writeBatch, query, orderBy,
-} from 'firebase/firestore';
-import { db, auth, isFirebaseConfigured } from '../firebase';
-import { generateSeedData, DEFAULT_CAPTAINS, CAPTAIN_COLORS } from '../utils/seedData';
-import { addDays } from '../utils/dates';
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 
@@ -65,24 +56,63 @@ const STORAGE = {
   CAPTAIN_ID:      'xc-captain',
   ADMIN:           'xc-admin',
   DARK_MODE:       'xc-dark',
-  DEMO:            'xc-demo-v6',
   ONBOARDING_DONE: 'xc-onboarding',
 };
 
-// ── Demo-mode helpers ─────────────────────────────────────────────────────────
+// ── Data transformation helpers (Supabase snake_case ↔ app camelCase) ─────────
 
-function loadDemo() {
-  try {
-    const raw = localStorage.getItem(STORAGE.DEMO);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+function dbToSettings(row) {
+  return {
+    teamName:          row.team_name,
+    startDate:         row.start_date,
+    numWeeks:          row.num_weeks,
+    defaultTime:       row.default_time,
+    practiceDays:      row.practice_days,
+    minCoveredDays:    row.min_covered_days,
+    minCaptainsPerDay: row.min_captains_per_day,
+    teamCode:          row.team_code,
+    adminCode:         row.admin_code,
+    announcements:     row.announcements || [],
+    onboarding:        row.onboarding || { welcomeTitle: '', welcomeSubtitle: '', slides: [] },
+  };
 }
 
-function saveDemo(patch) {
-  try {
-    const cur = loadDemo() || {};
-    localStorage.setItem(STORAGE.DEMO, JSON.stringify({ ...cur, ...patch }));
-  } catch {}
+function settingsToDB(s) {
+  return {
+    team_name:            s.teamName,
+    start_date:           s.startDate,
+    num_weeks:            s.numWeeks,
+    default_time:         s.defaultTime,
+    practice_days:        s.practiceDays,
+    min_covered_days:     s.minCoveredDays,
+    min_captains_per_day: s.minCaptainsPerDay,
+    team_code:            s.teamCode,
+    admin_code:           s.adminCode,
+    announcements:        s.announcements,
+    onboarding:           s.onboarding,
+    updated_at:           new Date().toISOString(),
+  };
+}
+
+function dbToAttendance(rows) {
+  const out = {};
+  for (const row of rows) {
+    if (!out[row.date]) out[row.date] = {};
+    out[row.date][row.captain_id] = row.attending;
+  }
+  return out;
+}
+
+function dbToDayDetails(rows) {
+  const out = {};
+  for (const row of rows) {
+    const obj = {};
+    if (row.location  != null) obj.location  = row.location;
+    if (row.cancelled != null) obj.cancelled = row.cancelled;
+    if (row.notes     != null) obj.notes     = row.notes;
+    if (Object.keys(obj).length) out[row.date] = obj;
+  }
+  return out;
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -98,359 +128,258 @@ export function useApp() {
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function AppProvider({ children }) {
-  // Demo mode = no Firebase env vars → use localStorage only
-  const demoMode = !isFirebaseConfigured;
-
-  /* ── Auth ─────────────────────────────────────────────────────────────── */
-  const [firebaseUser,  setFirebaseUser]  = useState(null);
-  const [authLoading,   setAuthLoading]   = useState(!demoMode && isFirebaseConfigured);
-
-  /* ── Access ───────────────────────────────────────────────────────────── */
-  const [teamVerified, setTeamVerified] = useState(
-    () => demoMode || safeGet(STORAGE.TEAM_VERIFIED) === 'true'
-  );
-  const [isAdmin, setIsAdmin] = useState(
-    () => safeSessionGet(STORAGE.ADMIN) === 'true'
-  );
-
-  /* ── Captain ──────────────────────────────────────────────────────────── */
-  const [currentCaptainId, setCurrentCaptainId] = useState(
-    () => safeGet(STORAGE.CAPTAIN_ID) || null
-  );
-
-  /* ── Dark mode — defaults to true (dark) on first visit ──────────────── */
+  // localStorage-backed UI/session state (device preferences only)
+  const [teamVerified, setTeamVerified] = useState(() => safeGet(STORAGE.TEAM_VERIFIED) === 'true');
+  const [isAdmin, setIsAdmin] = useState(() => safeSessionGet(STORAGE.ADMIN) === 'true');
+  const [currentCaptainId, setCurrentCaptainIdState] = useState(() => safeGet(STORAGE.CAPTAIN_ID) || null);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = safeGet(STORAGE.DARK_MODE);
     return saved === null ? true : saved === 'true';
   });
+  const [onboardingDone, setOnboardingDone] = useState(() => safeGet(STORAGE.ONBOARDING_DONE) === 'true');
 
-  /* ── Onboarding ───────────────────────────────────────────────────────── */
-  const [onboardingDone, setOnboardingDone] = useState(
-    () => safeGet(STORAGE.ONBOARDING_DONE) === 'true'
-  );
-
-  /* ── Data ─────────────────────────────────────────────────────────────── */
-  const [settings,    setSettings]    = useState(DEFAULT_SETTINGS);
-  const [captains,    setCaptains]    = useState([]);
-  const [attendance,  setAttendance]  = useState({});
-  const [dayDetails,  setDayDetails]  = useState({});
+  // Shared cloud data state
+  const [settings, setSettings]     = useState(DEFAULT_SETTINGS);
+  const [captains, setCaptains]     = useState([]);
+  const [attendance, setAttendance] = useState({});
+  const [dayDetails, setDayDetails] = useState({});
   const [dataLoading, setDataLoading] = useState(true);
-  const [loadError,   setLoadError]   = useState(false);
+  const [loadError, setLoadError]   = useState(false);
 
-  const initializing = useRef(false);
+  // Refs for stale-closure-safe callbacks
+  const dayDetailsRef  = useRef({});
+  const attendanceRef  = useRef({});
+  const settingsRef    = useRef(DEFAULT_SETTINGS);
+  const captainsRef    = useRef([]);
+  useEffect(() => { dayDetailsRef.current  = dayDetails;  }, [dayDetails]);
+  useEffect(() => { attendanceRef.current  = attendance;  }, [attendance]);
+  useEffect(() => { settingsRef.current    = settings;    }, [settings]);
+  useEffect(() => { captainsRef.current    = captains;    }, [captains]);
 
-  /* ── Dark mode sync ───────────────────────────────────────────────────── */
+  // Dark mode sync
   useEffect(() => {
     safeSet(STORAGE.DARK_MODE, darkMode);
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
-  /* ── Demo mode bootstrap ──────────────────────────────────────────────── */
+  // Stale captain cleanup
   useEffect(() => {
-    if (!demoMode) return;
-
-    const saved = loadDemo();
-    if (saved?.captains?.length) {
-      setSettings({ ...DEFAULT_SETTINGS, ...(saved.settings || {}) });
-      setCaptains(saved.captains);
-      setAttendance(saved.attendance || {});
-      setDayDetails(saved.dayDetails || {});
-    } else {
-      // First visit: seed captains only, everything else starts empty
-      const seed = generateSeedData();
-      setSettings(DEFAULT_SETTINGS);
-      setCaptains(seed.captains);
-      setAttendance({});
-      setDayDetails({});
-      saveDemo({
-        settings:   DEFAULT_SETTINGS,
-        captains:   seed.captains,
-        attendance: {},
-        dayDetails: {},
-      });
-    }
-    setDataLoading(false);
-  }, [demoMode]);
-
-  /* ── Firebase timeout — clears dataLoading if Firebase never responds ──── */
-  useEffect(() => {
-    if (demoMode || !dataLoading) return;
-    const t = setTimeout(() => {
-      console.error('[AppContext] Firebase load timed out after 10s — falling back to demo data');
-      const seed = generateSeedData();
-      setCaptains(seed.captains);
-      setAttendance({});
-      setDayDetails({});
-      setDataLoading(false);
-      setLoadError(true);
-    }, 10000);
-    return () => clearTimeout(t);
+    if (dataLoading || !captains.length || !currentCaptainId) return;
+    if (currentCaptainId === 'admin') return;
+    const found = captains.some(c => c.id === currentCaptainId);
+    if (!found) deselectCaptain();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demoMode]);
+  }, [dataLoading, captains, currentCaptainId]);
 
-  /* ── Firebase Anonymous Auth ──────────────────────────────────────────── */
+  // Load + realtime
   useEffect(() => {
-    if (demoMode || !auth) {
-      setAuthLoading(false);
+    if (!isSupabaseConfigured || !supabase) {
+      setLoadError(true);
+      setDataLoading(false);
       return;
     }
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setFirebaseUser(user);
-      } else {
-        try {
-          const result = await signInAnonymously(auth);
-          setFirebaseUser(result.user);
-        } catch (err) {
-          console.error('[AppContext] Anonymous sign-in failed:', err);
-          setAuthLoading(false);
-          setDataLoading(false);
-          setLoadError(true);
-          return;
-        }
+
+    let channel;
+
+    async function seedDatabase() {
+      const { DEFAULT_CAPTAINS } = await import('../utils/seedData');
+      await supabase.from('settings').insert({ id: 'main', ...settingsToDB(DEFAULT_SETTINGS) });
+      for (let i = 0; i < DEFAULT_CAPTAINS.length; i++) {
+        await supabase.from('captains').insert({
+          id: DEFAULT_CAPTAINS[i].id,
+          name: DEFAULT_CAPTAINS[i].name,
+          color: DEFAULT_CAPTAINS[i].color,
+          order: i,
+        });
       }
-      setAuthLoading(false);
-    }, (err) => {
-      console.error('[AppContext] onAuthStateChanged error:', err);
-      setAuthLoading(false);
-      setDataLoading(false);
-      setLoadError(true);
-    });
-    return unsub;
-  }, [demoMode]);
-
-  /* ── Firestore Listeners ──────────────────────────────────────────────── */
-  useEffect(() => {
-    if (demoMode || !db || !firebaseUser) return;
-
-    const unsubs = [];
-
-    unsubs.push(
-      onSnapshot(doc(db, 'config', 'main'), async (snap) => {
-        if (!snap.exists()) {
-          if (!initializing.current) {
-            initializing.current = true;
-            await initDatabase();
-          }
-        } else {
-          setSettings({ ...DEFAULT_SETTINGS, ...snap.data() });
-          setDataLoading(false);
-        }
-      }, (err) => { console.error('config listener:', err); setDataLoading(false); })
-    );
-
-    unsubs.push(
-      onSnapshot(
-        query(collection(db, 'captains'), orderBy('order', 'asc')),
-        (snap) => setCaptains(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-        (err) => console.error('captains listener:', err)
-      )
-    );
-
-    unsubs.push(
-      onSnapshot(collection(db, 'attendance'), (snap) => {
-        const data = {};
-        snap.docs.forEach(d => { data[d.id] = d.data(); });
-        setAttendance(data);
-      }, (err) => console.error('attendance listener:', err))
-    );
-
-    unsubs.push(
-      onSnapshot(collection(db, 'dayDetails'), (snap) => {
-        const data = {};
-        snap.docs.forEach(d => { data[d.id] = d.data(); });
-        setDayDetails(data);
-      }, (err) => console.error('dayDetails listener:', err))
-    );
-
-    return () => unsubs.forEach(u => u());
-  }, [demoMode, firebaseUser]);
-
-  /* ── First-run Firebase initialization ───────────────────────────────── */
-  async function initDatabase() {
-    const seed = generateSeedData();
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'config', 'main'), { ...DEFAULT_SETTINGS, createdAt: serverTimestamp() });
-    seed.captains.forEach((cap, i) => {
-      batch.set(doc(db, 'captains', cap.id), { name: cap.name, color: cap.color, order: i, createdAt: serverTimestamp() });
-    });
-    await batch.commit();
-  }
-
-  /* ── Team/Admin verification ──────────────────────────────────────────── */
-  const verifyTeamCode = useCallback(async (code) => {
-    if (demoMode) return true;
-    const correct = code.trim().toLowerCase() === (settings.teamCode || '').toLowerCase();
-    if (correct) {
-      setTeamVerified(true);
-      safeSet(STORAGE.TEAM_VERIFIED, 'true');
     }
+
+    async function load() {
+      try {
+        const [sRes, cRes, aRes, dRes] = await Promise.all([
+          supabase.from('settings').select('*').eq('id', 'main').maybeSingle(),
+          supabase.from('captains').select('*').order('order', { ascending: true }),
+          supabase.from('attendance').select('*'),
+          supabase.from('day_details').select('*'),
+        ]);
+
+        if (sRes.error) throw sRes.error;
+
+        if (!sRes.data) {
+          await seedDatabase();
+          const [s2, c2] = await Promise.all([
+            supabase.from('settings').select('*').eq('id', 'main').single(),
+            supabase.from('captains').select('*').order('order', { ascending: true }),
+          ]);
+          if (s2.data) setSettings(dbToSettings(s2.data));
+          if (c2.data) setCaptains(c2.data.map(r => ({ id: r.id, name: r.name, color: r.color, order: r.order })));
+        } else {
+          setSettings(dbToSettings(sRes.data));
+          setCaptains((cRes.data || []).map(r => ({ id: r.id, name: r.name, color: r.color, order: r.order })));
+        }
+
+        setAttendance(dbToAttendance(aRes.data || []));
+        setDayDetails(dbToDayDetails(dRes.data || []));
+        setDataLoading(false);
+      } catch (err) {
+        console.error('[AppContext] load error:', err);
+        setLoadError(true);
+        setDataLoading(false);
+      }
+    }
+
+    function setupRealtime() {
+      channel = supabase.channel('xc-live')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, ({ new: row }) => {
+          if (row) setSettings(dbToSettings(row));
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'captains' }, () => {
+          supabase.from('captains').select('*').order('order', { ascending: true }).then(({ data }) => {
+            if (data) setCaptains(data.map(r => ({ id: r.id, name: r.name, color: r.color, order: r.order })));
+          });
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'attendance' }, ({ new: r }) => {
+          setAttendance(prev => ({ ...prev, [r.date]: { ...(prev[r.date] || {}), [r.captain_id]: r.attending } }));
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'attendance' }, ({ new: r }) => {
+          setAttendance(prev => ({ ...prev, [r.date]: { ...(prev[r.date] || {}), [r.captain_id]: r.attending } }));
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'attendance' }, ({ old: r }) => {
+          setAttendance(prev => {
+            const next = { ...prev };
+            if (next[r.date]) { next[r.date] = { ...next[r.date] }; delete next[r.date][r.captain_id]; }
+            return next;
+          });
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'day_details' }, ({ new: r }) => {
+          setDayDetails(prev => ({ ...prev, [r.date]: { location: r.location, cancelled: r.cancelled, notes: r.notes } }));
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'day_details' }, ({ new: r }) => {
+          setDayDetails(prev => ({ ...prev, [r.date]: { location: r.location, cancelled: r.cancelled, notes: r.notes } }));
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'day_details' }, ({ old: r }) => {
+          setDayDetails(prev => { const next = { ...prev }; delete next[r.date]; return next; });
+        })
+        .subscribe();
+    }
+
+    load();
+    setupRealtime();
+    return () => { if (channel) supabase.removeChannel(channel); };
+  }, []);
+
+  // ── Write operations ──────────────────────────────────────────────────────────
+
+  const setDayDetail = useCallback(async (dateStr, patch) => {
+    const current = dayDetailsRef.current[dateStr] || {};
+    const merged  = { ...current, ...patch };
+    setDayDetails(prev => ({ ...prev, [dateStr]: merged }));
+    supabase.from('day_details').upsert({
+      date: dateStr, location: merged.location ?? null, cancelled: merged.cancelled ?? false,
+      notes: merged.notes ?? null, updated_at: new Date().toISOString(),
+    }).then(({ error }) => { if (error) console.error('setDayDetail:', error); });
+  }, []);
+
+  const clearDayDetail = useCallback(async (dateStr) => {
+    setDayDetails(prev => { const next = { ...prev }; delete next[dateStr]; return next; });
+    supabase.from('day_details').delete().eq('date', dateStr)
+      .then(({ error }) => { if (error) console.error('clearDayDetail:', error); });
+  }, []);
+
+  const toggleAttendance = useCallback(async (dateStr, captainId) => {
+    const current = attendanceRef.current[dateStr]?.[captainId] ?? false;
+    const newVal  = !current;
+    setAttendance(prev => ({ ...prev, [dateStr]: { ...(prev[dateStr] || {}), [captainId]: newVal } }));
+    supabase.from('attendance').upsert({
+      date: dateStr, captain_id: captainId, attending: newVal, updated_at: new Date().toISOString(),
+    }).then(({ error }) => { if (error) console.error('toggleAttendance:', error); });
+  }, []);
+
+  const isCaptainAttending = useCallback((dateStr, captainId) => {
+    return attendance[dateStr]?.[captainId] === true;
+  }, [attendance]);
+
+  const updateSettings = useCallback(async (patch) => {
+    const merged = { ...settingsRef.current, ...patch };
+    setSettings(merged);
+    supabase.from('settings').update(settingsToDB(merged)).eq('id', 'main')
+      .then(({ error }) => { if (error) console.error('updateSettings:', error); });
+  }, []);
+
+  const addCaptain = useCallback(async (name, color) => {
+    const id    = `cap_${Date.now()}`;
+    const order = captainsRef.current.length;
+    setCaptains(prev => [...prev, { id, name, color, order }]);
+    supabase.from('captains').insert({ id, name, color, order, created_at: new Date().toISOString() })
+      .then(({ error }) => { if (error) console.error('addCaptain:', error); });
+  }, []);
+
+  const removeCaptain = useCallback(async (id) => {
+    setCaptains(prev => prev.filter(c => c.id !== id));
+    setAttendance(prev => {
+      const next = {};
+      for (const [date, map] of Object.entries(prev)) {
+        const m = { ...map }; delete m[id]; next[date] = m;
+      }
+      return next;
+    });
+    supabase.from('captains').delete().eq('id', id)
+      .then(({ error }) => { if (error) console.error('removeCaptain:', error); });
+  }, []);
+
+  const updateCaptain = useCallback(async (id, patch) => {
+    setCaptains(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
+    supabase.from('captains').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
+      .then(({ error }) => { if (error) console.error('updateCaptain:', error); });
+  }, []);
+
+  // ── Auth callbacks ────────────────────────────────────────────────────────────
+
+  const verifyTeamCode = useCallback(async (code) => {
+    const correct = code.trim().toLowerCase() === (settingsRef.current.teamCode || '').toLowerCase();
+    if (correct) { setTeamVerified(true); safeSet(STORAGE.TEAM_VERIFIED, 'true'); }
     return correct;
-  }, [demoMode, settings.teamCode]);
+  }, []);
 
   const verifyAdminCode = useCallback((code) => {
-    const correct = code.trim() === settings.adminCode;
-    if (correct) {
-      setIsAdmin(true);
-      safeSessionSet(STORAGE.ADMIN, 'true');
-    }
+    const correct = code.trim() === settingsRef.current.adminCode;
+    if (correct) { setIsAdmin(true); safeSessionSet(STORAGE.ADMIN, 'true'); }
     return correct;
-  }, [settings.adminCode]);
+  }, []);
 
   const logoutAdmin = useCallback(() => {
     setIsAdmin(false);
     safeSessionRemove(STORAGE.ADMIN);
   }, []);
 
-  /* ── Captain selection ────────────────────────────────────────────────── */
+  const deselectCaptain = useCallback(() => {
+    setCurrentCaptainIdState(null);
+    setIsAdmin(false);
+    setTeamVerified(false);
+    safeRemove(STORAGE.CAPTAIN_ID);
+    safeRemove(STORAGE.TEAM_VERIFIED);
+    safeSessionRemove(STORAGE.ADMIN);
+  }, []);
+
   const selectCaptain = useCallback((id) => {
-    console.log('[AppContext] Captain selected:', id);
-    setCurrentCaptainId(id);
+    setCurrentCaptainIdState(id);
     safeSet(STORAGE.CAPTAIN_ID, id);
   }, []);
 
-  const deselectCaptain = useCallback(() => {
-    console.log('[AppContext] Captain deselected');
-    setCurrentCaptainId(null);
-    safeRemove(STORAGE.CAPTAIN_ID);
-  }, []);
+  const toggleDarkMode = useCallback(() => setDarkMode(d => !d), []);
 
-  /* ── Onboarding ───────────────────────────────────────────────────────── */
   const markOnboardingDone = useCallback(() => {
     setOnboardingDone(true);
     safeSet(STORAGE.ONBOARDING_DONE, 'true');
   }, []);
 
-  /* ── Attendance ───────────────────────────────────────────────────────── */
-  const toggleAttendance = useCallback(async (dateStr, captainId) => {
-    if (demoMode) {
-      setAttendance(prev => {
-        const next = {
-          ...prev,
-          [dateStr]: { ...(prev[dateStr] || {}), [captainId]: !(prev[dateStr]?.[captainId]) },
-        };
-        saveDemo({ attendance: next });
-        return next;
-      });
-      return;
-    }
-    if (!db) return;
-    const current = attendance[dateStr]?.[captainId] === true;
-    try {
-      await setDoc(doc(db, 'attendance', dateStr), { [captainId]: !current, updatedAt: serverTimestamp() }, { merge: true });
-    } catch (err) { console.error('toggleAttendance:', err); }
-  }, [demoMode, attendance]);
+  // ── Derived helpers ───────────────────────────────────────────────────────────
 
-  /* ── Settings ─────────────────────────────────────────────────────────── */
-  const updateSettings = useCallback(async (updates) => {
-    if (demoMode) {
-      setSettings(prev => {
-        const next = { ...prev, ...updates };
-        saveDemo({ settings: next });
-        return next;
-      });
-      return;
-    }
-    if (!db) return;
-    try {
-      await setDoc(doc(db, 'config', 'main'), { ...updates, updatedAt: serverTimestamp() }, { merge: true });
-    } catch (err) { console.error('updateSettings:', err); }
-  }, [demoMode]);
+  const currentCaptain = useMemo(
+    () => captains.find(c => c.id === currentCaptainId) || null,
+    [captains, currentCaptainId]
+  );
 
-  /* ── Captains ─────────────────────────────────────────────────────────── */
-  const addCaptain = useCallback(async (name, color) => {
-    const id = `cap_${Date.now()}`;
-    if (demoMode) {
-      setCaptains(prev => {
-        const next = [...prev, { id, name: name.trim(), color: color || CAPTAIN_COLORS[prev.length % CAPTAIN_COLORS.length], order: prev.length }];
-        saveDemo({ captains: next });
-        return next;
-      });
-      return;
-    }
-    if (!db) return;
-    await setDoc(doc(db, 'captains', id), {
-      name: name.trim(),
-      color: color || CAPTAIN_COLORS[captains.length % CAPTAIN_COLORS.length],
-      order: captains.length,
-      createdAt: serverTimestamp(),
-    });
-  }, [demoMode, captains.length]);
-
-  const removeCaptain = useCallback(async (captainId) => {
-    if (demoMode) {
-      setCaptains(prev => {
-        const next = prev.filter(c => c.id !== captainId);
-        saveDemo({ captains: next });
-        return next;
-      });
-      setAttendance(prev => {
-        const next = {};
-        for (const [d, v] of Object.entries(prev)) {
-          const { [captainId]: _, ...rest } = v;
-          next[d] = rest;
-        }
-        saveDemo({ attendance: next });
-        return next;
-      });
-      return;
-    }
-    if (!db) return;
-    await deleteDoc(doc(db, 'captains', captainId));
-    const batch = writeBatch(db);
-    for (const dateStr of Object.keys(attendance)) {
-      if (attendance[dateStr]?.[captainId] !== undefined) {
-        const cleaned = { ...attendance[dateStr] };
-        delete cleaned[captainId];
-        delete cleaned.updatedAt;
-        batch.set(doc(db, 'attendance', dateStr), { ...cleaned, updatedAt: serverTimestamp() });
-      }
-    }
-    await batch.commit();
-  }, [demoMode, attendance]);
-
-  const updateCaptain = useCallback(async (captainId, updates) => {
-    if (demoMode) {
-      setCaptains(prev => {
-        const next = prev.map(c => c.id === captainId ? { ...c, ...updates } : c);
-        saveDemo({ captains: next });
-        return next;
-      });
-      return;
-    }
-    if (!db) return;
-    await updateDoc(doc(db, 'captains', captainId), { ...updates, updatedAt: serverTimestamp() });
-  }, [demoMode]);
-
-  /* ── Day details ──────────────────────────────────────────────────────── */
-  const setDayDetail = useCallback(async (dateStr, detail) => {
-    if (demoMode) {
-      setDayDetails(prev => {
-        const next = { ...prev, [dateStr]: { ...(prev[dateStr] || {}), ...detail } };
-        saveDemo({ dayDetails: next });
-        return next;
-      });
-      return;
-    }
-    if (!db) return;
-    await setDoc(doc(db, 'dayDetails', dateStr), { ...detail, updatedAt: serverTimestamp() }, { merge: true });
-  }, [demoMode]);
-
-  const clearDayDetail = useCallback(async (dateStr) => {
-    if (demoMode) {
-      setDayDetails(prev => {
-        const next = { ...prev };
-        delete next[dateStr];
-        saveDemo({ dayDetails: next });
-        return next;
-      });
-      return;
-    }
-    if (!db) return;
-    await deleteDoc(doc(db, 'dayDetails', dateStr));
-  }, [demoMode]);
-
-  /* ── Derived helpers ──────────────────────────────────────────────────── */
   const getAttendingCaptains = useCallback((dateStr) => {
     const day = attendance[dateStr] || {};
     return captains.filter(c => day[c.id] === true);
@@ -460,14 +389,10 @@ export function AppProvider({ children }) {
     return dayDetails[dateStr]?.cancelled === true;
   }, [dayDetails]);
 
-  const isCaptainAttending = useCallback((dateStr, captainId) => {
-    return attendance[dateStr]?.[captainId] === true;
-  }, [attendance]);
-
-  const getWeekStats = useCallback((dayDates) => {
+  const getWeekStats = useCallback((days) => {
     let coveredCount = 0, totalActive = 0;
     const uncoveredDates = [];
-    for (const d of dayDates) {
+    for (const d of days) {
       if (dayDetails[d]?.cancelled) continue;
       totalActive++;
       const count = captains.filter(c => attendance[d]?.[c.id] === true).length;
@@ -479,33 +404,41 @@ export function AppProvider({ children }) {
       isCovered:  coveredCount >= settings.minCoveredDays,
       isPartial:  coveredCount > 0 && coveredCount < settings.minCoveredDays,
     };
-  }, [dayDetails, attendance, captains, settings.minCaptainsPerDay, settings.minCoveredDays]);
+  }, [captains, attendance, dayDetails, settings]);
 
   const getCaptainStats = useCallback(() => {
     const stats = {};
-    for (const c of captains) {
-      stats[c.id] = Object.values(attendance).reduce((acc, day) => acc + (day[c.id] === true ? 1 : 0), 0);
+    for (const [date, map] of Object.entries(attendance)) {
+      if (dayDetails[date]?.cancelled) continue;
+      for (const [cid, val] of Object.entries(map)) {
+        if (val) stats[cid] = (stats[cid] || 0) + 1;
+      }
     }
     return stats;
-  }, [captains, attendance]);
+  }, [attendance, dayDetails]);
 
-  /* ── Expose ───────────────────────────────────────────────────────────── */
-  const value = {
-    isFirebaseConfigured, demoMode,
-    authLoading, dataLoading, loadError, firebaseUser,
-    teamVerified, isAdmin, verifyTeamCode, verifyAdminCode, logoutAdmin,
-    currentCaptainId, selectCaptain, deselectCaptain,
-    currentCaptain: captains.find(c => c.id === currentCaptainId) || null,
-    settings, captains, attendance, dayDetails,
-    darkMode, toggleDarkMode: () => setDarkMode(d => !d),
-    onboardingDone, markOnboardingDone,
-    toggleAttendance, updateSettings,
-    addCaptain, removeCaptain, updateCaptain,
-    setDayDetail, clearDayDetail,
-    getAttendingCaptains, isDayCancelled, isCaptainAttending,
-    getWeekStats, getCaptainStats,
-    CAPTAIN_COLORS,
-  };
+  // ── Context value ─────────────────────────────────────────────────────────────
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider value={{
+      settings, captains, attendance, dayDetails,
+      dataLoading, loadError,
+      demoMode: false, authLoading: false,
+      teamVerified, isAdmin, currentCaptainId, currentCaptain,
+      darkMode, onboardingDone,
+      CAPTAIN_COLORS,
+      verifyTeamCode, verifyAdminCode, logoutAdmin,
+      setCurrentCaptainId: selectCaptain,
+      selectCaptain,
+      deselectCaptain, toggleDarkMode, markOnboardingDone,
+      addCaptain, removeCaptain, updateCaptain,
+      setDayDetail, clearDayDetail,
+      toggleAttendance, isCaptainAttending,
+      getAttendingCaptains, isDayCancelled,
+      updateSettings,
+      getWeekStats, getCaptainStats,
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
 }
