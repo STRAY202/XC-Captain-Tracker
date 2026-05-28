@@ -152,8 +152,10 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
   const cardRef = useRef(null);
   const {
     getWeekStats, captains, attendance, dayDetails, settings,
-    currentCaptainId, isAdmin, setDayDetail, clearDayDetail,
+    currentCaptainId, isAdmin, userMode, setDayDetail, clearDayDetail,
   } = useApp();
+
+  const canEdit = userMode === 'captain' || currentCaptainId === 'admin';
 
   const [editMode,  setEditMode]  = useState(false);
   const [brush,     setBrush]     = useState('memorial');
@@ -246,17 +248,19 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
               {coveredCount}/{settings.minCoveredDays}
             </span>
 
-            <button
-              id={tourId('tour-edit-btn')}
-              onClick={() => { setEditMode(s => !s); setBrush('memorial'); }}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all active:scale-95 ${
-                editMode
-                  ? 'bg-emerald-500 text-white shadow-sm'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-            >
-              {editMode ? '✓ Done' : <><Pencil size={10} /> Edit</>}
-            </button>
+            {canEdit && (
+              <button
+                id={tourId('tour-edit-btn')}
+                onClick={() => { setEditMode(s => !s); setBrush('memorial'); }}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all active:scale-95 ${
+                  editMode
+                    ? 'bg-emerald-500 text-white shadow-sm'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                }`}
+              >
+                {editMode ? '✓ Done' : <><Pencil size={10} /> Edit</>}
+              </button>
+            )}
           </div>
         </div>
 

@@ -48,6 +48,9 @@ export const DEFAULT_SETTINGS = {
     welcomeTitle:    '',
     welcomeSubtitle: '',
     slides:          [],
+    captainCode:     'captain2026',
+    weatherLat:      42.28,
+    weatherLon:      -71.06,
   },
 };
 
@@ -57,6 +60,8 @@ const STORAGE = {
   ADMIN:           'xc-admin',
   DARK_MODE:       'xc-dark',
   ONBOARDING_DONE: 'xc-onboarding',
+  USER_MODE:       'xc-user-mode',
+  ATHLETE_NAME:    'xc-athlete-name',
 };
 
 // ── Data transformation helpers (Supabase snake_case ↔ app camelCase) ─────────
@@ -140,6 +145,15 @@ export function AppProvider({ children }) {
   const [teamVerified, setTeamVerified] = useState(() => safeGet(STORAGE.TEAM_VERIFIED) === 'true');
   const [isAdmin, setIsAdmin] = useState(() => safeSessionGet(STORAGE.ADMIN) === 'true');
   const [currentCaptainId, setCurrentCaptainIdState] = useState(() => safeGet(STORAGE.CAPTAIN_ID) || null);
+  // 'captain' | 'athlete' | null — inferred from stored ID if not explicitly set
+  const [userMode, setUserMode] = useState(() => {
+    const stored = safeGet(STORAGE.USER_MODE);
+    if (stored) return stored;
+    const id = safeGet(STORAGE.CAPTAIN_ID);
+    if (!id) return null;
+    return id.startsWith('athlete_') ? 'athlete' : 'captain';
+  });
+  const [athleteName, setAthleteName] = useState(() => safeGet(STORAGE.ATHLETE_NAME) || '');
   const [darkMode, setDarkMode] = useState(() => {
     if (!versionOk) return true;           // always start dark after a version bump
     const saved = safeGet(STORAGE.DARK_MODE);
@@ -184,10 +198,11 @@ export function AppProvider({ children }) {
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
-  // Stale captain cleanup
+  // Stale captain cleanup (skip admin and athlete IDs)
   useEffect(() => {
     if (dataLoading || !captains.length || !currentCaptainId) return;
     if (currentCaptainId === 'admin') return;
+    if (currentCaptainId.startsWith('athlete_')) return;
     const found = captains.some(c => c.id === currentCaptainId);
     if (!found) deselectCaptain();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -394,14 +409,37 @@ export function AppProvider({ children }) {
     setCurrentCaptainIdState(null);
     setIsAdmin(false);
     setTeamVerified(false);
+    setUserMode(null);
+    setAthleteName('');
     safeRemove(STORAGE.CAPTAIN_ID);
     safeRemove(STORAGE.TEAM_VERIFIED);
+    safeRemove(STORAGE.USER_MODE);
+    safeRemove(STORAGE.ATHLETE_NAME);
     safeSessionRemove(STORAGE.ADMIN);
   }, []);
 
   const selectCaptain = useCallback((id) => {
     setCurrentCaptainIdState(id);
+    setUserMode('captain');
     safeSet(STORAGE.CAPTAIN_ID, id);
+    safeSet(STORAGE.USER_MODE, 'captain');
+  }, []);
+
+  // Athlete sign-in: store a slugified ID in attendance table
+  const selectAthleteMode = useCallback((name) => {
+    const slug = name.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const id   = `athlete_${slug}`;
+    setCurrentCaptainIdState(id);
+    setUserMode('athlete');
+    setAthleteName(name.trim());
+    safeSet(STORAGE.CAPTAIN_ID, id);
+    safeSet(STORAGE.USER_MODE, 'athlete');
+    safeSet(STORAGE.ATHLETE_NAME, name.trim());
+  }, []);
+
+  const verifyCaptainCode = useCallback((code) => {
+    const stored = settingsRef.current.onboarding?.captainCode || 'captain2026';
+    return code.trim() === stored;
   }, []);
 
   const toggleDarkMode = useCallback(() => setDarkMode(d => !d), []);
@@ -463,9 +501,11 @@ export function AppProvider({ children }) {
       dataLoading, syncError,
       demoMode: false, authLoading: false,
       teamVerified, isAdmin, currentCaptainId, currentCaptain,
+      userMode, athleteName,
       darkMode, onboardingDone,
       CAPTAIN_COLORS,
       verifyTeamCode, verifyAdminCode, logoutAdmin,
+      verifyCaptainCode, selectAthleteMode,
       setCurrentCaptainId: selectCaptain,
       selectCaptain,
       deselectCaptain, toggleDarkMode, markOnboardingDone,
