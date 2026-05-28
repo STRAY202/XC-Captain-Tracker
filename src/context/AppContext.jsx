@@ -144,7 +144,7 @@ export function AppProvider({ children }) {
   const [attendance, setAttendance] = useState({});
   const [dayDetails, setDayDetails] = useState({});
   const [dataLoading, setDataLoading] = useState(true);
-  const [loadError, setLoadError]   = useState(false);
+  const [syncError, setSyncError]   = useState(false);
 
   // Refs for stale-closure-safe callbacks
   const dayDetailsRef  = useRef({});
@@ -174,7 +174,8 @@ export function AppProvider({ children }) {
   // Load + realtime
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
-      setLoadError(true);
+      console.warn('[AppContext] Supabase not configured — running with defaults');
+      setSyncError(true);
       setDataLoading(false);
       return;
     }
@@ -195,6 +196,13 @@ export function AppProvider({ children }) {
     }
 
     async function load() {
+      // Always resolve within 12s — never leave the app stuck spinning
+      const failsafe = setTimeout(() => {
+        console.warn('[AppContext] Load timeout — showing app with defaults');
+        setSyncError(true);
+        setDataLoading(false);
+      }, 12000);
+
       try {
         const [sRes, cRes, aRes, dRes] = await Promise.all([
           supabase.from('settings').select('*').eq('id', 'main').maybeSingle(),
@@ -202,6 +210,8 @@ export function AppProvider({ children }) {
           supabase.from('attendance').select('*'),
           supabase.from('day_details').select('*'),
         ]);
+
+        clearTimeout(failsafe);
 
         if (sRes.error) throw sRes.error;
 
@@ -222,8 +232,9 @@ export function AppProvider({ children }) {
         setDayDetails(dbToDayDetails(dRes.data || []));
         setDataLoading(false);
       } catch (err) {
+        clearTimeout(failsafe);
         console.error('[AppContext] load error:', err);
-        setLoadError(true);
+        setSyncError(true);
         setDataLoading(false);
       }
     }
@@ -422,7 +433,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       settings, captains, attendance, dayDetails,
-      dataLoading, loadError,
+      dataLoading, syncError,
       demoMode: false, authLoading: false,
       teamVerified, isAdmin, currentCaptainId, currentCaptain,
       darkMode, onboardingDone,

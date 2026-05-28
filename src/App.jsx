@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
   Moon, Sun, Settings, LogOut, ChevronDown, ChevronUp,
-  Database, RefreshCw, Zap, HelpCircle,
+  Database, Zap, HelpCircle,
 } from 'lucide-react';
 import { useApp } from './context/AppContext';
 import { generateSchedule, today, fromDateStr } from './utils/dates';
@@ -14,7 +14,7 @@ import OnboardingFlow from './components/OnboardingFlow';
 
 export default function App() {
   const {
-    demoMode, authLoading, dataLoading, loadError,
+    demoMode, authLoading, dataLoading, syncError,
     settings, captains, dayDetails,
     currentCaptainId, currentCaptain, deselectCaptain,
     darkMode, toggleDarkMode,
@@ -25,16 +25,10 @@ export default function App() {
   // ── All hooks must be called unconditionally before any conditional return ──
   const [showAdmin,    setShowAdmin]    = useState(false);
   const [showAllWeeks, setShowAllWeeks] = useState(false);
-  const [timedOut,     setTimedOut]     = useState(false);
   const [showHelp,     setShowHelp]     = useState(false);
+  const [syncDismissed, setSyncDismissed] = useState(false);
 
   const isLoading = authLoading || (dataLoading && captains.length === 0);
-
-  useEffect(() => {
-    if (!isLoading) { setTimedOut(false); return; }
-    const t = setTimeout(() => setTimedOut(true), 8000);
-    return () => clearTimeout(t);
-  }, [isLoading]);
 
   useEffect(() => {
     if (dataLoading || !captains.length || !currentCaptainId) return;
@@ -83,32 +77,6 @@ export default function App() {
   );
 
   // ── Routing guards — after all hooks ──────────────────────────────────────────
-
-  if (timedOut || loadError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-6">
-        <div className="text-center animate-fade-in max-w-xs">
-          <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">⚠️</span>
-          </div>
-          <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2">
-            {loadError ? 'Connection Error' : 'Taking too long…'}
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            {loadError
-              ? 'Could not connect to the server. Check your connection and try again.'
-              : 'The app is taking longer than expected to load.'}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="btn-primary mx-auto"
-          >
-            <RefreshCw size={15} /> Reload App
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (
@@ -244,6 +212,29 @@ export default function App() {
                   </p>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ── Sync error banner (non-blocking) ────────────────────────── */}
+          {syncError && !syncDismissed && (
+            <div className="mx-4 mt-2 flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/60 animate-fade-in">
+              <span className="text-base flex-shrink-0" aria-hidden>⚠️</span>
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 flex-1 leading-snug">
+                Sync unavailable — changes save locally only
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="text-[11px] font-bold text-amber-700 dark:text-amber-300 underline underline-offset-2 flex-shrink-0 active:opacity-70"
+              >
+                Retry
+              </button>
+              <button
+                onClick={() => setSyncDismissed(true)}
+                className="text-amber-400 dark:text-amber-600 flex-shrink-0 active:opacity-70 ml-1"
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
             </div>
           )}
 
