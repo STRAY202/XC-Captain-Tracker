@@ -17,18 +17,16 @@ function locKey(loc) {
 }
 function locData(loc) {
   const k = locKey(loc);
-  if (k === 'other') return { ...LOCATIONS.other, short: loc?.slice(0, 7) || '' };
+  if (k === 'other') return { ...LOCATIONS.other, short: loc || '' };
   return LOCATIONS[k];
 }
 
-// ── Reliable long-press via Pointer Events ────────────────────────────────────
+// ── Long-press — touch + mouse, works reliably on iOS/Android ────────────────
 function useLongPress(onLongPress, ms = 500) {
-  const timer   = useRef(null);
-  const fired   = useRef(false);
-  const pointerId = useRef(null);
+  const timer  = useRef(null);
+  const fired  = useRef(false);
 
-  const start = useCallback((e) => {
-    pointerId.current = e.pointerId;
+  const start = useCallback(() => {
     fired.current = false;
     timer.current = setTimeout(() => {
       fired.current = true;
@@ -41,12 +39,14 @@ function useLongPress(onLongPress, ms = 500) {
   }, []);
 
   return {
-    onPointerDown:   start,
-    onPointerUp:     cancel,
-    onPointerLeave:  cancel,
-    onPointerCancel: cancel,
-    onContextMenu:   (e) => e.preventDefault(),
-    wasFired:        () => fired.current,
+    onTouchStart:  start,
+    onTouchEnd:    cancel,
+    onTouchMove:   cancel,   // finger moved = probably scrolling, cancel
+    onMouseDown:   start,
+    onMouseUp:     cancel,
+    onMouseLeave:  cancel,
+    onContextMenu: (e) => e.preventDefault(),
+    wasFired:      () => fired.current,
   };
 }
 
@@ -416,8 +416,12 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
           </span>
         </div>
 
-        {/* 6-day horizontal grid */}
-        <div className="grid grid-cols-6 gap-1">
+        {/* Horizontal day grid — columns match number of practice days */}
+        <div className={`grid gap-1.5 ${
+          week.days.length <= 3 ? 'grid-cols-3' :
+          week.days.length <= 4 ? 'grid-cols-4' :
+          week.days.length <= 5 ? 'grid-cols-5' : 'grid-cols-6'
+        }`}>
           {week.days.map(dateStr => (
             <DayCard key={dateStr} dateStr={dateStr} />
           ))}

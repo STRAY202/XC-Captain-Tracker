@@ -47,7 +47,7 @@ export const DEFAULT_SETTINGS = {
   startDate:         '2026-06-15',
   numWeeks:          11,
   defaultTime:       '8:00 AM',
-  practiceDays:      [0, 1, 2, 3, 4, 5],
+  practiceDays:      [0, 2, 4],
   minCoveredDays:    3,
   minCaptainsPerDay: 1,
   teamCode:          'xc2026',
@@ -65,7 +65,7 @@ const STORAGE = {
   CAPTAIN_ID:      'xc-captain',
   ADMIN:           'xc-admin',
   DARK_MODE:       'xc-dark',
-  DEMO:            'xc-demo-v4',
+  DEMO:            'xc-demo-v5',
   ONBOARDING_DONE: 'xc-onboarding',
 };
 
