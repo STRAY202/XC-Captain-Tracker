@@ -226,7 +226,7 @@ export default function App() {
               style={{ backgroundColor: currentCaptain.color + '18', color: currentCaptain.color }}
             >
               <span>👋</span>
-              <span>Hi {currentCaptain.name}! Tap a day to mark attendance · Hold to edit location</span>
+              <span>Hi {currentCaptain.name}! Tap a day to attend · tap Edit to change location</span>
             </div>
           )}
 

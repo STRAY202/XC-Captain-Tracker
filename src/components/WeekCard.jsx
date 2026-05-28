@@ -21,14 +21,6 @@ function locInfo(loc) {
   return LOC[k];
 }
 
-// ── Edit brushes ──────────────────────────────────────────────────────────────
-const BRUSHES = [
-  { id: 'memorial', label: 'Memorial',    color: '#10b981' },
-  { id: 'cutler',   label: 'Cutler Park', color: '#3b82f6' },
-  { id: 'other',    label: 'Other…',      color: '#8b5cf6' },
-  { id: 'cancel',   label: 'Cancel Day',  color: '#ef4444' },
-];
-
 // ── Day card ──────────────────────────────────────────────────────────────────
 function DayCard({ dateStr, editMode, onEditTap }) {
   const {
@@ -56,7 +48,6 @@ function DayCard({ dateStr, editMode, onEditTap }) {
     if (canToggle) toggleAttendance(dateStr, currentCaptainId);
   };
 
-  // ── Cancelled ──
   if (isCancelled) {
     return (
       <button
@@ -74,7 +65,6 @@ function DayCard({ dateStr, editMode, onEditTap }) {
     );
   }
 
-  // ── Active ──
   const cardStyle = myAttending && !editMode
     ? { backgroundColor: '#10b981', boxShadow: '0 4px 16px #10b98145' }
     : {};
@@ -147,14 +137,10 @@ function DayCard({ dateStr, editMode, onEditTap }) {
       )}
 
       <div className="flex-1 min-h-[4px]" />
-
-      {/* Location color strip */}
       <div
         className="w-full h-[3px] flex-shrink-0"
         style={{
-          backgroundColor: myAttending && !editMode
-            ? 'rgba(255,255,255,0.3)'
-            : ld.color,
+          backgroundColor: myAttending && !editMode ? 'rgba(255,255,255,0.3)' : ld.color,
         }}
       />
     </button>
@@ -169,9 +155,9 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
     currentCaptainId, isAdmin, setDayDetail, clearDayDetail,
   } = useApp();
 
-  const [editMode,   setEditMode]   = useState(false);
-  const [brush,      setBrush]      = useState('memorial');
-  const [otherName,  setOtherName]  = useState('');
+  const [editMode,  setEditMode]  = useState(false);
+  const [brush,     setBrush]     = useState('memorial');
+  const [otherName, setOtherName] = useState('');
 
   const { coveredCount, totalActive, isCovered, isPartial } = getWeekStats(week.days);
   const isUncovered = coveredCount === 0 && totalActive > 0;
@@ -195,9 +181,17 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
                  : numDays <= 5 ? 'grid-cols-5'
                  : 'grid-cols-6';
 
+  // Brushes — Cancel Day is admin-only
+  const brushes = [
+    { id: 'memorial', label: 'Memorial',    color: '#10b981' },
+    { id: 'cutler',   label: 'Cutler Park', color: '#3b82f6' },
+    { id: 'other',    label: 'Other…',      color: '#8b5cf6' },
+    ...(isAdmin ? [{ id: 'cancel', label: 'Cancel Day', color: '#ef4444' }] : []),
+  ];
+
   const applyBrush = (dateStr) => {
     const override = dayDetails[dateStr] || {};
-    if (brush === 'cancel') {
+    if (brush === 'cancel' && isAdmin) {
       if (!override.cancelled) {
         setDayDetail(dateStr, { cancelled: true });
       } else {
@@ -214,6 +208,9 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
       setDayDetail(dateStr, { location: otherName.trim(), cancelled: false });
     }
   };
+
+  // Tour IDs — only attach to the first week card so onboarding can spotlight them
+  const tourId = (name) => weekIndex === 0 ? name : undefined;
 
   return (
     <div
@@ -237,32 +234,34 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-              isCovered     ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300'
-              : isPartial   ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300'
-              : isUncovered ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400'
-              :               'bg-gray-100 dark:bg-gray-800 text-gray-500'
-            }`}>
+            <span
+              id={tourId('tour-coverage')}
+              className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                isCovered     ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300'
+                : isPartial   ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300'
+                : isUncovered ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400'
+                :               'bg-gray-100 dark:bg-gray-800 text-gray-500'
+              }`}
+            >
               {coveredCount}/{settings.minCoveredDays}
             </span>
 
-            {isAdmin && (
-              <button
-                onClick={() => { setEditMode(s => !s); setBrush('memorial'); }}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all active:scale-95 ${
-                  editMode
-                    ? 'bg-emerald-500 text-white shadow-sm'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
-              >
-                {editMode ? '✓ Done' : <><Pencil size={10} /> Edit</>}
-              </button>
-            )}
+            <button
+              id={tourId('tour-edit-btn')}
+              onClick={() => { setEditMode(s => !s); setBrush('memorial'); }}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all active:scale-95 ${
+                editMode
+                  ? 'bg-emerald-500 text-white shadow-sm'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              {editMode ? '✓ Done' : <><Pencil size={10} /> Edit</>}
+            </button>
           </div>
         </div>
 
         {/* Day grid */}
-        <div className={`grid ${gridCols} gap-1`}>
+        <div id={tourId('tour-day-grid')} className={`grid ${gridCols} gap-1`}>
           {week.days.map(dateStr => (
             <DayCard
               key={dateStr}
@@ -274,13 +273,13 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
         </div>
 
         {/* Edit panel */}
-        {editMode && isAdmin && (
+        {editMode && (
           <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800/60 rounded-2xl animate-fade-in">
             <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">
-              Select · then tap a day
+              Select · then tap a day above
             </p>
             <div className="flex gap-2 flex-wrap">
-              {BRUSHES.map(b => (
+              {brushes.map(b => (
                 <button
                   key={b.id}
                   onClick={() => setBrush(b.id)}
@@ -307,7 +306,7 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
           </div>
         )}
 
-        {/* Captain summary footer */}
+        {/* Captain summary */}
         <div className="mt-3 flex items-center justify-between flex-wrap gap-2">
           {myDays > 0 && currentCaptainId && currentCaptainId !== 'admin' && (
             <div className="flex items-center gap-1.5">

@@ -1,52 +1,126 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronRight, ChevronLeft, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
+// Each slide can reference a DOM element by ID — the tour will scroll to it
+// and cut a spotlight hole through the dim overlay so the real UI is visible.
 const BUILT_IN_SLIDES = [
-  {
-    id: 'welcome',
-    icon: '⚡',
-    gradient: 'from-emerald-500 to-teal-600',
-    title: 'Welcome to the Team!',
-    body: 'Your captain scheduling hub — simple, fast, and built for your whole team.',
-  },
   {
     id: 'attendance',
     icon: '✅',
     gradient: 'from-blue-500 to-indigo-600',
     title: 'Mark Your Attendance',
-    body: 'Tap any day button on the schedule to toggle yourself in or out. Done in one tap.',
+    body: 'Tap any day card once to toggle yourself in or out of practice. It saves instantly.',
+    spotlightId: 'tour-day-grid',
   },
   {
     id: 'coverage',
     icon: '🟢',
     gradient: 'from-green-500 to-emerald-600',
-    title: 'Green = Covered',
-    body: 'A green week means enough captains are attending. Red means the week needs more coverage.',
+    title: 'Coverage Counter',
+    body: 'This badge tracks how many days are covered this week. You need 3 to go green.',
+    spotlightId: 'tour-coverage',
   },
   {
     id: 'location',
     icon: '📍',
     gradient: 'from-orange-500 to-amber-500',
-    title: 'Hold to Edit a Day',
-    body: 'Press and hold any practice day to change its location or cancel it. Green bottom strip = Memorial, Blue = Cutler Park.',
+    title: 'Change Practice Location',
+    body: 'Tap Edit on any week, pick a location (Memorial, Cutler Park, or custom), then tap the days to set it.',
+    spotlightId: 'tour-edit-btn',
   },
   {
-    id: 'edit',
-    icon: '⚙️',
+    id: 'colors',
+    icon: '🎨',
     gradient: 'from-violet-500 to-purple-600',
-    title: 'Admin Controls',
-    body: 'Admins can cancel practices, change locations, and manage the roster from Settings. Hold any day to edit it directly.',
+    title: 'Location Colors',
+    body: 'Green strip = Memorial · Blue = Cutler Park. See where practice is at a glance.',
+    spotlightId: 'tour-day-grid',
   },
   {
     id: 'mobile',
     icon: '📱',
     gradient: 'from-pink-500 to-rose-500',
-    title: 'Works on Any Device',
-    body: 'Add this page to your home screen for instant one-tap access. Changes sync in real time.',
+    title: 'Works Everywhere',
+    body: 'Add this page to your home screen for one-tap access. Changes sync in real time.',
+    spotlightId: null,
   },
 ];
 
+// ── Spotlight SVG overlay — dims everything except the target element ─────────
+function SpotlightOverlay({ spotlightId }) {
+  const [rect, setRect] = useState(null);
+
+  useEffect(() => {
+    setRect(null); // clear immediately on slide change
+
+    if (!spotlightId) return;
+
+    const el = document.getElementById(spotlightId);
+    if (!el) return;
+
+    // Scroll element into the visible area, then read its position
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    const t = setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      setRect({ x: r.left, y: r.top, w: r.width, h: r.height });
+    }, 420);
+
+    return () => clearTimeout(t);
+  }, [spotlightId]);
+
+  const pad = 12;
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="fixed inset-0 pointer-events-none"
+      style={{ zIndex: 58, width: '100vw', height: '100vh' }}
+    >
+      <defs>
+        <mask id="onb-mask">
+          <rect width="100%" height="100%" fill="white" />
+          {rect && (
+            <rect
+              x={rect.x - pad}
+              y={rect.y - pad}
+              width={rect.w + pad * 2}
+              height={rect.h + pad * 2}
+              rx={16}
+              fill="black"
+            />
+          )}
+        </mask>
+      </defs>
+
+      {/* Dark overlay with the hole cut out */}
+      <rect
+        width="100%"
+        height="100%"
+        fill="rgba(0,0,0,0.80)"
+        mask="url(#onb-mask)"
+      />
+
+      {/* Emerald highlight ring around the spotlighted element */}
+      {rect && (
+        <rect
+          x={rect.x - pad}
+          y={rect.y - pad}
+          width={rect.w + pad * 2}
+          height={rect.h + pad * 2}
+          rx={16}
+          fill="none"
+          stroke="#10b981"
+          strokeWidth={2.5}
+          opacity={0.9}
+        />
+      )}
+    </svg>
+  );
+}
+
+// ── Main onboarding component ─────────────────────────────────────────────────
 export default function OnboardingFlow({ onComplete, isHelp = false }) {
   const { settings, markOnboardingDone } = useApp();
 
@@ -54,138 +128,113 @@ export default function OnboardingFlow({ onComplete, isHelp = false }) {
   const slides = customSlides?.length ? customSlides : BUILT_IN_SLIDES;
 
   const [step, setStep] = useState(0);
-  const [visible, setVisible] = useState(true);
-
-  const total = slides.length;
   const current = slides[step];
-  const isLast = step === total - 1;
+  const isLast  = step === slides.length - 1;
 
-  function goTo(nextStep) {
-    if (nextStep === step) return;
-    setVisible(false);
-    setTimeout(() => {
-      setStep(nextStep);
-      setVisible(true);
-    }, 170);
-  }
-
-  function handleNext() {
-    if (isLast) handleComplete();
-    else goTo(step + 1);
-  }
-
-  function handleBack() {
-    if (step > 0) goTo(step - 1);
-  }
-
+  function goTo(i) { setStep(i); }
+  function handleNext() { isLast ? handleComplete() : goTo(step + 1); }
+  function handleBack() { if (step > 0) goTo(step - 1); }
   function handleComplete() {
     if (!isHelp) markOnboardingDone();
     onComplete?.();
   }
 
-  // First slide uses admin-customized title/body if set
   const slideTitle = step === 0 && settings?.onboarding?.welcomeTitle
-    ? settings.onboarding.welcomeTitle
-    : current.title;
-  const slideBody = step === 0 && settings?.onboarding?.welcomeSubtitle
-    ? settings.onboarding.welcomeSubtitle
-    : current.body;
+    ? settings.onboarding.welcomeTitle : current.title;
+  const slideBody  = step === 0 && settings?.onboarding?.welcomeSubtitle
+    ? settings.onboarding.welcomeSubtitle : current.body;
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-gray-950 animate-fade-in">
+    <div className="fixed inset-0" style={{ zIndex: 57 }}>
 
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-5 pt-safe pt-4 pb-2 flex-shrink-0">
-        <span className="text-xs font-bold text-white/25 tabular-nums">
-          {step + 1} / {total}
-        </span>
-        <button
-          onClick={handleComplete}
-          className="flex items-center gap-1.5 text-xs font-semibold text-white/35 hover:text-white/60 transition-colors py-2 px-3 rounded-xl hover:bg-white/8 active:scale-95"
-        >
-          {isHelp
-            ? <><X size={13} /> Close</>
-            : 'Skip'
-          }
-        </button>
-      </div>
+      {/* SVG spotlight overlay (pointer-events: none — purely visual) */}
+      <SpotlightOverlay spotlightId={current.spotlightId} />
 
-      {/* Slide content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-8 overflow-hidden">
-        <div
-          style={{
-            transition: 'opacity 170ms ease, transform 170ms ease',
-            opacity: visible ? 1 : 0,
-            transform: visible ? 'translateY(0px)' : 'translateY(14px)',
-          }}
-          className="w-full max-w-xs text-center"
-        >
-          {/* Icon card */}
-          <div className="flex justify-center mb-8">
+      {/* Tap-anywhere-to-advance layer (covers full screen, below the card) */}
+      <div
+        className="absolute inset-0"
+        style={{ zIndex: 59 }}
+        onClick={handleNext}
+      />
+
+      {/* Bottom slide card */}
+      <div
+        className="absolute bottom-0 left-0 right-0 rounded-t-3xl bg-gray-950"
+        style={{ zIndex: 60, boxShadow: '0 -8px 48px rgba(0,0,0,0.6)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3">
+          <div className="w-10 h-1 rounded-full bg-white/20" />
+        </div>
+
+        <div className="px-5 pt-4 pb-10">
+
+          {/* Icon + title row */}
+          <div className="flex items-center gap-3 mb-3">
             <div
-              className={`w-32 h-32 rounded-[2.5rem] bg-gradient-to-br ${current.gradient || 'from-emerald-500 to-teal-600'} flex items-center justify-center`}
-              style={{ boxShadow: '0 24px 64px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.08)' }}
+              className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${current.gradient || 'from-emerald-500 to-teal-600'} flex items-center justify-center flex-shrink-0`}
+              style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.45)' }}
             >
-              <span style={{ fontSize: '3.8rem', lineHeight: 1 }}>{current.icon || '⭐'}</span>
+              <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>{current.icon || '⭐'}</span>
             </div>
+            <h2 className="flex-1 text-lg font-black text-white leading-tight">{slideTitle}</h2>
+            <button
+              onClick={handleComplete}
+              className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 active:bg-white/20 transition-colors"
+            >
+              <X size={14} className="text-white/50" />
+            </button>
           </div>
 
-          {/* Text */}
-          <h2 className="text-[1.6rem] font-black text-white mb-3 leading-tight tracking-tight">
-            {slideTitle}
-          </h2>
-          <p className="text-[1rem] text-white/50 leading-relaxed font-medium">
-            {slideBody}
-          </p>
-        </div>
-      </div>
+          <p className="text-sm text-white/55 leading-relaxed mb-5">{slideBody}</p>
 
-      {/* Bottom controls */}
-      <div className="flex-shrink-0 px-6 pb-safe pb-8 pt-5">
+          {/* Progress bar + nav */}
+          <div className="flex items-center gap-3">
 
-        {/* Progress dots */}
-        <div className="flex justify-center gap-2 mb-7">
-          {slides.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => goTo(i)}
-              className="rounded-full transition-all duration-300 active:scale-90"
-              style={{
-                width: i === step ? '28px' : '8px',
-                height: '8px',
-                backgroundColor: i === step
-                  ? '#10b981'
-                  : i < step
-                    ? 'rgba(16,185,129,0.35)'
-                    : 'rgba(255,255,255,0.15)',
-              }}
-            />
-          ))}
-        </div>
-
-        {/* Navigation */}
-        <div className="flex gap-3">
-          {step > 0 && (
             <button
               onClick={handleBack}
-              className="w-14 h-14 rounded-2xl bg-white/8 flex items-center justify-center hover:bg-white/15 transition-colors active:scale-95 flex-shrink-0 border border-white/10"
+              className={`w-10 h-10 rounded-xl bg-white/8 flex items-center justify-center active:scale-90 transition-all border border-white/10 ${
+                step === 0 ? 'opacity-0 pointer-events-none' : 'hover:bg-white/15'
+              }`}
             >
-              <ChevronLeft size={22} className="text-white/70" />
+              <ChevronLeft size={18} className="text-white/70" />
             </button>
-          )}
-          <button
-            onClick={handleNext}
-            className={`flex-1 h-14 rounded-2xl font-black text-base transition-all active:scale-[0.97] flex items-center justify-center gap-2 ${
-              isLast
-                ? 'bg-emerald-500 text-white hover:bg-emerald-400'
-                : 'bg-white text-gray-900 hover:bg-gray-100'
-            }`}
-            style={isLast ? { boxShadow: '0 8px 32px rgba(16,185,129,0.45)' } : { boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
-          >
-            {isLast
-              ? (isHelp ? '✓ Got it!' : '🚀 Get Started')
-              : <>Next <ChevronRight size={18} /></>}
-          </button>
+
+            {/* Progress dots */}
+            <div className="flex-1 flex gap-1.5 justify-center">
+              {slides.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => goTo(i)}
+                  className="rounded-full transition-all duration-300 active:scale-90"
+                  style={{
+                    width:           i === step ? '24px' : '7px',
+                    height:          '7px',
+                    backgroundColor: i <= step
+                      ? '#10b981'
+                      : 'rgba(255,255,255,0.18)',
+                  }}
+                />
+              ))}
+            </div>
+
+            <button
+              onClick={handleNext}
+              className={`px-5 h-10 rounded-xl font-bold text-sm flex items-center gap-1.5 transition-all active:scale-95 ${
+                isLast
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-white text-gray-900 hover:bg-gray-100'
+              }`}
+              style={isLast ? { boxShadow: '0 4px 20px rgba(16,185,129,0.45)' } : { boxShadow: '0 2px 12px rgba(0,0,0,0.3)' }}
+            >
+              {isLast
+                ? (isHelp ? '✓ Got it' : '🚀 Start')
+                : <>Next <ChevronRight size={15} /></>
+              }
+            </button>
+
+          </div>
         </div>
       </div>
     </div>
