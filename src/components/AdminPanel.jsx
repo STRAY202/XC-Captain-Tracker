@@ -2,9 +2,10 @@ import { useState } from 'react';
 import {
   X, Plus, Trash2, Users, Settings2, Calendar,
   Lock, ChevronDown, ChevronUp, Check, AlertTriangle,
-  Shield, Clock, Eye, EyeOff, Zap, Bell, BookOpen,
+  Shield, Clock, Eye, EyeOff, Zap, Bell, Link, BookOpen,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, LOCATIONS } from '../context/AppContext';
 import { formatShort } from '../utils/dates';
 
 // ── Collapsible section ────────────────────────────────────────────────────────
@@ -47,43 +48,23 @@ function Field({ label, children }) {
   );
 }
 
-const ADMIN_LOCATIONS = ['Memorial', 'Cutler Park'];
 function LocationPicker({ value, onChange }) {
-  const isPreset = ADMIN_LOCATIONS.includes(value);
-  const [otherText, setOtherText] = useState(!isPreset ? value : '');
-  const selected = isPreset ? value : (value ? 'other' : '');
-
   return (
-    <div className="space-y-2">
-      <div className="flex gap-1.5 flex-wrap">
-        {ADMIN_LOCATIONS.map(loc => (
-          <button key={loc} type="button"
-            onClick={() => onChange(loc)}
-            className={`text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 ${
-              selected === loc
-                ? 'bg-emerald-500 text-white shadow-sm'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+    <div className="flex gap-1.5 flex-wrap">
+      {LOCATIONS.map(loc => {
+        const isSelected = value === loc.id || value === loc.label;
+        return (
+          <button key={loc.id} type="button"
+            onClick={() => onChange(loc.id)}
+            className={`text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 text-white ${
+              isSelected ? 'shadow-sm' : 'opacity-40 hover:opacity-70'
             }`}
-          >{loc}</button>
-        ))}
-        <button type="button"
-          onClick={() => { if (selected !== 'other') { setOtherText(''); onChange(''); } }}
-          className={`text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 ${
-            selected === 'other'
-              ? 'bg-emerald-500 text-white shadow-sm'
-              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
-        >Other…</button>
-      </div>
-      {selected === 'other' && (
-        <input type="text" value={otherText}
-          onChange={e => setOtherText(e.target.value)}
-          onBlur={() => { if (otherText.trim()) onChange(otherText.trim()); }}
-          onKeyDown={e => e.key === 'Enter' && otherText.trim() && onChange(otherText.trim())}
-          placeholder="Custom location…"
-          className="field-input"
-        />
-      )}
+            style={{ backgroundColor: isSelected ? loc.color : loc.color + '66' }}
+          >
+            {loc.short}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -163,10 +144,14 @@ function AdminLoginGate({ onClose }) {
 export default function AdminPanel({ onClose }) {
   const {
     settings, captains, dayDetails,
-    updateSettings, addCaptain, removeCaptain, updateCaptain,
+    updateSettings, updateOnboarding, addCaptain, removeCaptain, updateCaptain,
     setDayDetail, clearDayDetail,
     isAdmin, logoutAdmin, CAPTAIN_COLORS,
   } = useApp();
+
+  const activeWeekIndex = settings.onboarding?.activeWeekIndex ?? 0;
+  const sheetsUrl       = settings.onboarding?.sheetsUrl ?? '';
+  const captainCode     = settings.onboarding?.captainCode ?? 'captain2026';
 
   const [newName, setNewName]   = useState('');
   const [newColor, setNewColor] = useState(CAPTAIN_COLORS[0]);
@@ -272,6 +257,54 @@ export default function AdminPanel({ onClose }) {
 
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 px-4 py-4 space-y-3 no-scrollbar">
+
+          {/* ── Schedule Control ───────────────────────────────────────────── */}
+          <Section
+            title="Schedule Control"
+            icon={Calendar}
+            iconBg="bg-emerald-100 dark:bg-emerald-900/40"
+            iconColor="text-emerald-600 dark:text-emerald-400"
+            defaultOpen={true}
+          >
+            <Field label="Active Week for Athletes">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => updateOnboarding({ activeWeekIndex: Math.max(0, activeWeekIndex - 1) })}
+                  disabled={activeWeekIndex === 0}
+                  className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center disabled:opacity-30 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-90"
+                >
+                  <ChevronLeft size={16} className="text-gray-600 dark:text-gray-400" />
+                </button>
+                <div className="flex-1 text-center">
+                  <div className="text-lg font-black text-gray-900 dark:text-white">Week {activeWeekIndex + 1}</div>
+                  <div className="text-xs text-gray-400 dark:text-gray-500">currently shown to athletes</div>
+                </div>
+                <button
+                  onClick={() => updateOnboarding({ activeWeekIndex: Math.min(settings.numWeeks - 1, activeWeekIndex + 1) })}
+                  disabled={activeWeekIndex >= settings.numWeeks - 1}
+                  className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center disabled:opacity-30 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-90"
+                >
+                  <ChevronRight size={16} className="text-gray-600 dark:text-gray-400" />
+                </button>
+              </div>
+            </Field>
+
+            <Field label="Workout Sheet (Google Sheets URL)">
+              <div className="relative">
+                <Link size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  type="url"
+                  value={sheetsUrl}
+                  onChange={e => updateOnboarding({ sheetsUrl: e.target.value })}
+                  placeholder="https://docs.google.com/spreadsheets/d/…"
+                  className="field-input pl-9"
+                />
+              </div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                Share the sheet publicly → "Anyone with link can view". Format: Date (YYYY-MM-DD) in column A, workout in column B.
+              </p>
+            </Field>
+          </Section>
 
           {/* ── Announcements ──────────────────────────────────────────────── */}
           <Section
@@ -456,12 +489,22 @@ export default function AdminPanel({ onClose }) {
                 <strong>Admin code</strong> — unlocks this settings panel.
               </p>
             </div>
-            <Field label="Team Access Code">
+            <Field label="Athlete Code (xc2026)">
               <input
                 type="text"
                 value={settings.teamCode || ''}
                 onChange={e => updateSettings({ teamCode: e.target.value })}
                 placeholder="e.g. xc2026"
+                className="field-input"
+                autoComplete="off"
+              />
+            </Field>
+            <Field label="Captain Code (captain2026)">
+              <input
+                type="text"
+                value={captainCode}
+                onChange={e => updateOnboarding({ captainCode: e.target.value })}
+                placeholder="e.g. captain2026"
                 className="field-input"
                 autoComplete="off"
               />
@@ -477,7 +520,7 @@ export default function AdminPanel({ onClose }) {
               />
             </Field>
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              Changes save instantly. Share new codes with your team.
+              Athletes use the Athlete Code · Captains use the Captain Code · Admins use the Admin Code.
             </p>
           </Section>
 

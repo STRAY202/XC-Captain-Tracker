@@ -4,19 +4,31 @@ import React, {
 } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase';
 import { CAPTAIN_COLORS, DEFAULT_CAPTAINS } from '../utils/seedData';
+import { fetchWorkouts } from '../utils/sheets';
 
-// ── Safe localStorage (iOS Safari private mode & storage quota) ───────────────
+// ── Locations ─────────────────────────────────────────────────────────────────
+export const LOCATIONS = [
+  { id: 'Memorial',  label: 'Memorial',         short: 'Memorial',  color: '#10b981' },
+  { id: 'Cutler',    label: 'Cutler Park',       short: 'Cutler',    color: '#3b82f6' },
+  { id: 'Charles',   label: 'Charles River',     short: 'Charles',   color: '#8b5cf6' },
+  { id: 'Peninsula', label: 'Charles Peninsula', short: 'Peninsula', color: '#6366f1' },
+];
+export function getLocation(id) {
+  return LOCATIONS.find(l => l.id === id || l.label === id) ?? LOCATIONS[0];
+}
+
+// ── Safe localStorage ─────────────────────────────────────────────────────────
 function safeGet(key) {
   try { return window.localStorage.getItem(key); }
-  catch (e) { console.warn('[storage] read failed:', key, e); return null; }
+  catch { return null; }
 }
 function safeSet(key, value) {
   try { window.localStorage.setItem(key, String(value)); }
-  catch (e) { console.warn('[storage] write failed:', key, e); }
+  catch {}
 }
 function safeRemove(key) {
   try { window.localStorage.removeItem(key); }
-  catch (e) { console.warn('[storage] remove failed:', key, e); }
+  catch {}
 }
 function safeSessionGet(key) {
   try { return window.sessionStorage.getItem(key); }
@@ -32,7 +44,6 @@ function safeSessionRemove(key) {
 }
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
-
 export const DEFAULT_SETTINGS = {
   teamName:          'XC Summer Training',
   startDate:         '2026-06-15',
@@ -51,21 +62,24 @@ export const DEFAULT_SETTINGS = {
     captainCode:     'captain2026',
     weatherLat:      42.28,
     weatherLon:      -71.06,
+    sheetsUrl:       '',
+    activeWeekIndex: 0,
   },
 };
 
 const STORAGE = {
-  TEAM_VERIFIED:   'xc-team-ok',
-  CAPTAIN_ID:      'xc-captain',
-  ADMIN:           'xc-admin',
-  DARK_MODE:       'xc-dark',
-  ONBOARDING_DONE: 'xc-onboarding',
-  USER_MODE:       'xc-user-mode',
-  ATHLETE_NAME:    'xc-athlete-name',
+  TEAM_VERIFIED:      'xc-team-ok',
+  CAPTAIN_ID:         'xc-captain',
+  ADMIN:              'xc-admin',
+  DARK_MODE:          'xc-dark',
+  ONBOARDING_DONE:    'xc-onboarding',
+  USER_MODE:          'xc-user-mode',
+  ATHLETE_NAME:       'xc-athlete-name',
+  ATHLETE_ONBOARDED:  'xc-ath-ob',
+  CAPTAIN_ONBOARDED:  'xc-cap-ob',
 };
 
-// ── Data transformation helpers (Supabase snake_case ↔ app camelCase) ─────────
-
+// ── DB transformers ────────────────────────────────────────────────────────────
 function dbToSettings(row) {
   return {
     teamName:          row.team_name,
@@ -78,10 +92,9 @@ function dbToSettings(row) {
     teamCode:          row.team_code,
     adminCode:         row.admin_code,
     announcements:     row.announcements || [],
-    onboarding:        row.onboarding || { welcomeTitle: '', welcomeSubtitle: '', slides: [] },
+    onboarding:        row.onboarding || DEFAULT_SETTINGS.onboarding,
   };
 }
-
 function settingsToDB(s) {
   return {
     team_name:            s.teamName,
@@ -98,120 +111,120 @@ function settingsToDB(s) {
     updated_at:           new Date().toISOString(),
   };
 }
-
 function dbToAttendance(rows) {
   const out = {};
-  for (const row of rows) {
-    if (!out[row.date]) out[row.date] = {};
-    out[row.date][row.captain_id] = row.attending;
+  for (const r of rows) {
+    if (!out[r.date]) out[r.date] = {};
+    out[r.date][r.captain_id] = r.attending;
   }
   return out;
 }
-
 function dbToDayDetails(rows) {
   const out = {};
-  for (const row of rows) {
+  for (const r of rows) {
     const obj = {};
-    if (row.location  != null) obj.location  = row.location;
-    if (row.cancelled != null) obj.cancelled = row.cancelled;
-    if (row.notes     != null) obj.notes     = row.notes;
-    if (Object.keys(obj).length) out[row.date] = obj;
+    if (r.location  != null) obj.location  = r.location;
+    if (r.cancelled != null) obj.cancelled = r.cancelled;
+    if (r.notes     != null) obj.notes     = r.notes;
+    if (Object.keys(obj).length) out[r.date] = obj;
   }
   return out;
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
-
 const AppContext = createContext(null);
-
 export function useApp() {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error('useApp must be used within AppProvider');
   return ctx;
 }
 
-// ── Provider ──────────────────────────────────────────────────────────────────
-
-// Bump this string any time you want all users to get a fresh onboarding + dark-mode reset.
-const APP_VERSION = 'v2';
+const APP_VERSION = 'v3';
 
 export function AppProvider({ children }) {
-  // Version migration: runs synchronously inside lazy initialisers so there is no flash.
-  // If the stored version doesn't match APP_VERSION we treat onboarding as unseen and
-  // reset dark mode back to the default (dark).  Captain / team login is preserved.
   const versionOk = safeGet('xc-app-version') === APP_VERSION;
 
-  // localStorage-backed UI/session state (device preferences only)
-  const [teamVerified, setTeamVerified] = useState(() => safeGet(STORAGE.TEAM_VERIFIED) === 'true');
-  const [isAdmin, setIsAdmin] = useState(() => safeSessionGet(STORAGE.ADMIN) === 'true');
+  // Auth / session state
+  const [teamVerified,    setTeamVerified]    = useState(() => safeGet(STORAGE.TEAM_VERIFIED) === 'true');
+  const [isAdmin,         setIsAdmin]         = useState(() => safeSessionGet(STORAGE.ADMIN) === 'true');
   const [currentCaptainId, setCurrentCaptainIdState] = useState(() => safeGet(STORAGE.CAPTAIN_ID) || null);
-  // 'captain' | 'athlete' | null — inferred from stored ID if not explicitly set
-  const [userMode, setUserMode] = useState(() => {
+  const [userMode,        setUserMode]        = useState(() => {
     const stored = safeGet(STORAGE.USER_MODE);
     if (stored) return stored;
     const id = safeGet(STORAGE.CAPTAIN_ID);
     if (!id) return null;
     return id.startsWith('athlete_') ? 'athlete' : 'captain';
   });
-  const [athleteName, setAthleteName] = useState(() => safeGet(STORAGE.ATHLETE_NAME) || '');
+  const [athleteName,     setAthleteName]     = useState(() => safeGet(STORAGE.ATHLETE_NAME) || '');
+
+  // Role-specific onboarding flags
+  const [athleteOnboarded, setAthleteOnboarded] = useState(() =>
+    versionOk && safeGet(STORAGE.ATHLETE_ONBOARDED) === 'true'
+  );
+  const [captainOnboarded, setCaptainOnboarded] = useState(() =>
+    versionOk && safeGet(STORAGE.CAPTAIN_ONBOARDED) === 'true'
+  );
+
   const [darkMode, setDarkMode] = useState(() => {
-    if (!versionOk) return true;           // always start dark after a version bump
+    if (!versionOk) return true;
     const saved = safeGet(STORAGE.DARK_MODE);
     return saved === null ? true : saved === 'true';
   });
-  const [onboardingDone, setOnboardingDone] = useState(() => {
-    if (!versionOk) return false;          // always show tour after a version bump
-    return safeGet(STORAGE.ONBOARDING_DONE) === 'true';
-  });
 
-  // Persist the migration so the reset only happens once per version
+  // Version migration
   useEffect(() => {
     if (safeGet('xc-app-version') !== APP_VERSION) {
-      safeRemove(STORAGE.ONBOARDING_DONE);
       safeSet(STORAGE.DARK_MODE, 'true');
       safeSet('xc-app-version', APP_VERSION);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Shared cloud data state
-  const [settings, setSettings]     = useState(DEFAULT_SETTINGS);
-  const [captains, setCaptains]     = useState(DEFAULT_CAPTAINS);
-  const [attendance, setAttendance] = useState({});
-  const [dayDetails, setDayDetails] = useState({});
+  // Cloud data
+  const [settings,    setSettings]    = useState(DEFAULT_SETTINGS);
+  const [captains,    setCaptains]    = useState(DEFAULT_CAPTAINS);
+  const [attendance,  setAttendance]  = useState({});
+  const [dayDetails,  setDayDetails]  = useState({});
+  const [workouts,    setWorkouts]    = useState({});
   const [dataLoading, setDataLoading] = useState(true);
-  const [syncError, setSyncError]   = useState(false);
+  const [syncError,   setSyncError]   = useState(false);
 
-  // Refs for stale-closure-safe callbacks
+  // Stale-closure-safe refs
   const dayDetailsRef  = useRef({});
   const attendanceRef  = useRef({});
   const settingsRef    = useRef(DEFAULT_SETTINGS);
-  const captainsRef    = useRef([]);
+  const captainsRef    = useRef(DEFAULT_CAPTAINS);
   useEffect(() => { dayDetailsRef.current  = dayDetails;  }, [dayDetails]);
   useEffect(() => { attendanceRef.current  = attendance;  }, [attendance]);
   useEffect(() => { settingsRef.current    = settings;    }, [settings]);
   useEffect(() => { captainsRef.current    = captains;    }, [captains]);
 
-  // Dark mode sync
+  // Dark mode sync to DOM
   useEffect(() => {
     safeSet(STORAGE.DARK_MODE, darkMode);
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
+  // Google Sheets workout sync
+  useEffect(() => {
+    const url = settings.onboarding?.sheetsUrl;
+    if (!url) return;
+    fetchWorkouts(url).then(data => {
+      if (Object.keys(data).length) setWorkouts(data);
+    });
+  }, [settings.onboarding?.sheetsUrl]);
+
   // Stale captain cleanup (skip admin and athlete IDs)
   useEffect(() => {
     if (dataLoading || !captains.length || !currentCaptainId) return;
-    if (currentCaptainId === 'admin') return;
-    if (currentCaptainId.startsWith('athlete_')) return;
-    const found = captains.some(c => c.id === currentCaptainId);
-    if (!found) deselectCaptain();
+    if (currentCaptainId === 'admin' || currentCaptainId.startsWith('athlete_')) return;
+    if (!captains.some(c => c.id === currentCaptainId)) deselectCaptain();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataLoading, captains, currentCaptainId]);
 
-  // Load + realtime
+  // Supabase load + realtime
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
-      console.warn('[AppContext] Supabase not configured — running with defaults');
       setSyncError(true);
       setDataLoading(false);
       return;
@@ -223,22 +236,16 @@ export function AppProvider({ children }) {
       await supabase.from('settings').insert({ id: 'main', ...settingsToDB(DEFAULT_SETTINGS) });
       for (let i = 0; i < DEFAULT_CAPTAINS.length; i++) {
         await supabase.from('captains').insert({
-          id: DEFAULT_CAPTAINS[i].id,
-          name: DEFAULT_CAPTAINS[i].name,
-          color: DEFAULT_CAPTAINS[i].color,
-          order: i,
+          id: DEFAULT_CAPTAINS[i].id, name: DEFAULT_CAPTAINS[i].name,
+          color: DEFAULT_CAPTAINS[i].color, order: i,
         });
       }
     }
 
     async function load() {
-      // Always resolve within 12s — never leave the app stuck spinning
       const failsafe = setTimeout(() => {
-        console.warn('[AppContext] Load timeout — showing app with defaults');
-        setSyncError(true);
-        setDataLoading(false);
+        setSyncError(true); setDataLoading(false);
       }, 12000);
-
       try {
         const [sRes, cRes, aRes, dRes] = await Promise.all([
           supabase.from('settings').select('*').eq('id', 'main').maybeSingle(),
@@ -246,15 +253,11 @@ export function AppProvider({ children }) {
           supabase.from('attendance').select('*'),
           supabase.from('day_details').select('*'),
         ]);
-
         clearTimeout(failsafe);
-
-        // Throw on any table error so the catch block preserves DEFAULT_CAPTAINS
         if (sRes.error) throw sRes.error;
         if (cRes.error) throw cRes.error;
 
         if (!sRes.data) {
-          // Fresh DB — seed settings + default captains then reload
           await seedDatabase();
           const [s2, c2] = await Promise.all([
             supabase.from('settings').select('*').eq('id', 'main').single(),
@@ -264,12 +267,8 @@ export function AppProvider({ children }) {
           if (c2.data?.length) setCaptains(c2.data.map(r => ({ id: r.id, name: r.name, color: r.color, order: r.order })));
         } else {
           setSettings(dbToSettings(sRes.data));
-          // Only overwrite captains if Supabase actually returned some — otherwise keep defaults
-          if (cRes.data?.length) {
-            setCaptains(cRes.data.map(r => ({ id: r.id, name: r.name, color: r.color, order: r.order })));
-          }
+          if (cRes.data?.length) setCaptains(cRes.data.map(r => ({ id: r.id, name: r.name, color: r.color, order: r.order })));
         }
-
         if (aRes.data?.length) setAttendance(dbToAttendance(aRes.data));
         if (dRes.data?.length) setDayDetails(dbToDayDetails(dRes.data));
         setDataLoading(false);
@@ -287,9 +286,8 @@ export function AppProvider({ children }) {
           if (row) setSettings(dbToSettings(row));
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'captains' }, () => {
-          supabase.from('captains').select('*').order('order', { ascending: true }).then(({ data }) => {
-            if (data) setCaptains(data.map(r => ({ id: r.id, name: r.name, color: r.color, order: r.order })));
-          });
+          supabase.from('captains').select('*').order('order', { ascending: true })
+            .then(({ data }) => { if (data) setCaptains(data.map(r => ({ id: r.id, name: r.name, color: r.color, order: r.order }))); });
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'attendance' }, ({ new: r }) => {
           setAttendance(prev => ({ ...prev, [r.date]: { ...(prev[r.date] || {}), [r.captain_id]: r.attending } }));
@@ -322,14 +320,13 @@ export function AppProvider({ children }) {
   }, []);
 
   // ── Write operations ──────────────────────────────────────────────────────────
-
   const setDayDetail = useCallback(async (dateStr, patch) => {
-    const current = dayDetailsRef.current[dateStr] || {};
-    const merged  = { ...current, ...patch };
+    const merged = { ...(dayDetailsRef.current[dateStr] || {}), ...patch };
     setDayDetails(prev => ({ ...prev, [dateStr]: merged }));
     supabase.from('day_details').upsert({
-      date: dateStr, location: merged.location ?? null, cancelled: merged.cancelled ?? false,
-      notes: merged.notes ?? null, updated_at: new Date().toISOString(),
+      date: dateStr, location: merged.location ?? null,
+      cancelled: merged.cancelled ?? false, notes: merged.notes ?? null,
+      updated_at: new Date().toISOString(),
     }).then(({ error }) => { if (error) console.error('setDayDetail:', error); });
   }, []);
 
@@ -340,17 +337,16 @@ export function AppProvider({ children }) {
   }, []);
 
   const toggleAttendance = useCallback(async (dateStr, captainId) => {
-    const current = attendanceRef.current[dateStr]?.[captainId] ?? false;
-    const newVal  = !current;
+    const newVal = !(attendanceRef.current[dateStr]?.[captainId] ?? false);
     setAttendance(prev => ({ ...prev, [dateStr]: { ...(prev[dateStr] || {}), [captainId]: newVal } }));
     supabase.from('attendance').upsert({
       date: dateStr, captain_id: captainId, attending: newVal, updated_at: new Date().toISOString(),
     }).then(({ error }) => { if (error) console.error('toggleAttendance:', error); });
   }, []);
 
-  const isCaptainAttending = useCallback((dateStr, captainId) => {
-    return attendance[dateStr]?.[captainId] === true;
-  }, [attendance]);
+  const isCaptainAttending = useCallback((dateStr, captainId) =>
+    attendance[dateStr]?.[captainId] === true,
+  [attendance]);
 
   const updateSettings = useCallback(async (patch) => {
     const merged = { ...settingsRef.current, ...patch };
@@ -359,9 +355,13 @@ export function AppProvider({ children }) {
       .then(({ error }) => { if (error) console.error('updateSettings:', error); });
   }, []);
 
+  const updateOnboarding = useCallback(async (patch) => {
+    const ob = { ...(settingsRef.current.onboarding || {}), ...patch };
+    updateSettings({ onboarding: ob });
+  }, [updateSettings]);
+
   const addCaptain = useCallback(async (name, color) => {
-    const id    = `cap_${Date.now()}`;
-    const order = captainsRef.current.length;
+    const id = `cap_${Date.now()}`, order = captainsRef.current.length;
     setCaptains(prev => [...prev, { id, name, color, order }]);
     supabase.from('captains').insert({ id, name, color, order, created_at: new Date().toISOString() })
       .then(({ error }) => { if (error) console.error('addCaptain:', error); });
@@ -369,72 +369,27 @@ export function AppProvider({ children }) {
 
   const removeCaptain = useCallback(async (id) => {
     setCaptains(prev => prev.filter(c => c.id !== id));
-    setAttendance(prev => {
-      const next = {};
-      for (const [date, map] of Object.entries(prev)) {
-        const m = { ...map }; delete m[id]; next[date] = m;
-      }
-      return next;
-    });
     supabase.from('captains').delete().eq('id', id)
       .then(({ error }) => { if (error) console.error('removeCaptain:', error); });
   }, []);
 
   const updateCaptain = useCallback(async (id, patch) => {
     setCaptains(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
-    supabase.from('captains').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
+    supabase.from('captains').update(patch).eq('id', id)
       .then(({ error }) => { if (error) console.error('updateCaptain:', error); });
   }, []);
 
-  // ── Auth callbacks ────────────────────────────────────────────────────────────
-
+  // ── Auth ──────────────────────────────────────────────────────────────────────
   const verifyTeamCode = useCallback(async (code) => {
-    const correct = code.trim().toLowerCase() === (settingsRef.current.teamCode || '').toLowerCase();
-    if (correct) { setTeamVerified(true); safeSet(STORAGE.TEAM_VERIFIED, 'true'); }
-    return correct;
+    const ok = code.trim().toLowerCase() === (settingsRef.current.teamCode || '').toLowerCase();
+    if (ok) { setTeamVerified(true); safeSet(STORAGE.TEAM_VERIFIED, 'true'); }
+    return ok;
   }, []);
 
   const verifyAdminCode = useCallback((code) => {
-    const correct = code.trim() === settingsRef.current.adminCode;
-    if (correct) { setIsAdmin(true); safeSessionSet(STORAGE.ADMIN, 'true'); }
-    return correct;
-  }, []);
-
-  const logoutAdmin = useCallback(() => {
-    setIsAdmin(false);
-    safeSessionRemove(STORAGE.ADMIN);
-  }, []);
-
-  const deselectCaptain = useCallback(() => {
-    setCurrentCaptainIdState(null);
-    setIsAdmin(false);
-    setTeamVerified(false);
-    setUserMode(null);
-    setAthleteName('');
-    safeRemove(STORAGE.CAPTAIN_ID);
-    safeRemove(STORAGE.TEAM_VERIFIED);
-    safeRemove(STORAGE.USER_MODE);
-    safeRemove(STORAGE.ATHLETE_NAME);
-    safeSessionRemove(STORAGE.ADMIN);
-  }, []);
-
-  const selectCaptain = useCallback((id) => {
-    setCurrentCaptainIdState(id);
-    setUserMode('captain');
-    safeSet(STORAGE.CAPTAIN_ID, id);
-    safeSet(STORAGE.USER_MODE, 'captain');
-  }, []);
-
-  // Athlete sign-in: store a slugified ID in attendance table
-  const selectAthleteMode = useCallback((name) => {
-    const slug = name.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-    const id   = `athlete_${slug}`;
-    setCurrentCaptainIdState(id);
-    setUserMode('athlete');
-    setAthleteName(name.trim());
-    safeSet(STORAGE.CAPTAIN_ID, id);
-    safeSet(STORAGE.USER_MODE, 'athlete');
-    safeSet(STORAGE.ATHLETE_NAME, name.trim());
+    const ok = code.trim() === settingsRef.current.adminCode;
+    if (ok) { setIsAdmin(true); safeSessionSet(STORAGE.ADMIN, 'true'); }
+    return ok;
   }, []);
 
   const verifyCaptainCode = useCallback((code) => {
@@ -442,15 +397,42 @@ export function AppProvider({ children }) {
     return code.trim() === stored;
   }, []);
 
-  const toggleDarkMode = useCallback(() => setDarkMode(d => !d), []);
-
-  const markOnboardingDone = useCallback(() => {
-    setOnboardingDone(true);
-    safeSet(STORAGE.ONBOARDING_DONE, 'true');
+  const logoutAdmin = useCallback(() => {
+    setIsAdmin(false); safeSessionRemove(STORAGE.ADMIN);
   }, []);
 
-  // ── Derived helpers ───────────────────────────────────────────────────────────
+  const deselectCaptain = useCallback(() => {
+    setCurrentCaptainIdState(null); setIsAdmin(false);
+    setTeamVerified(false); setUserMode(null); setAthleteName('');
+    safeRemove(STORAGE.CAPTAIN_ID); safeRemove(STORAGE.TEAM_VERIFIED);
+    safeRemove(STORAGE.USER_MODE); safeRemove(STORAGE.ATHLETE_NAME);
+    safeSessionRemove(STORAGE.ADMIN);
+  }, []);
 
+  const selectCaptain = useCallback((id) => {
+    setCurrentCaptainIdState(id); setUserMode('captain');
+    safeSet(STORAGE.CAPTAIN_ID, id); safeSet(STORAGE.USER_MODE, 'captain');
+  }, []);
+
+  const selectAthleteMode = useCallback((name) => {
+    const slug = name.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const id   = `athlete_${slug}`;
+    setCurrentCaptainIdState(id); setUserMode('athlete'); setAthleteName(name.trim());
+    safeSet(STORAGE.CAPTAIN_ID, id); safeSet(STORAGE.USER_MODE, 'athlete');
+    safeSet(STORAGE.ATHLETE_NAME, name.trim());
+  }, []);
+
+  const markAthleteOnboarded = useCallback(() => {
+    setAthleteOnboarded(true); safeSet(STORAGE.ATHLETE_ONBOARDED, 'true');
+  }, []);
+
+  const markCaptainOnboarded = useCallback(() => {
+    setCaptainOnboarded(true); safeSet(STORAGE.CAPTAIN_ONBOARDED, 'true');
+  }, []);
+
+  const toggleDarkMode = useCallback(() => setDarkMode(d => !d), []);
+
+  // ── Derived ───────────────────────────────────────────────────────────────────
   const currentCaptain = useMemo(
     () => captains.find(c => c.id === currentCaptainId) || null,
     [captains, currentCaptainId]
@@ -461,9 +443,9 @@ export function AppProvider({ children }) {
     return captains.filter(c => day[c.id] === true);
   }, [attendance, captains]);
 
-  const isDayCancelled = useCallback((dateStr) => {
-    return dayDetails[dateStr]?.cancelled === true;
-  }, [dayDetails]);
+  const isDayCancelled = useCallback((dateStr) =>
+    dayDetails[dateStr]?.cancelled === true,
+  [dayDetails]);
 
   const getWeekStats = useCallback((days) => {
     let coveredCount = 0, totalActive = 0;
@@ -475,11 +457,9 @@ export function AppProvider({ children }) {
       if (count >= settings.minCaptainsPerDay) coveredCount++;
       else uncoveredDates.push(d);
     }
-    return {
-      coveredCount, totalActive, uncoveredDates,
-      isCovered:  coveredCount >= settings.minCoveredDays,
-      isPartial:  coveredCount > 0 && coveredCount < settings.minCoveredDays,
-    };
+    return { coveredCount, totalActive, uncoveredDates,
+      isCovered: coveredCount >= settings.minCoveredDays,
+      isPartial: coveredCount > 0 && coveredCount < settings.minCoveredDays };
   }, [captains, attendance, dayDetails, settings]);
 
   const getCaptainStats = useCallback(() => {
@@ -493,27 +473,30 @@ export function AppProvider({ children }) {
     return stats;
   }, [attendance, dayDetails]);
 
-  // ── Context value ─────────────────────────────────────────────────────────────
+  // Active week index for athlete view
+  const activeWeekIndex = settings.onboarding?.activeWeekIndex ?? 0;
 
+  // ── Context value ─────────────────────────────────────────────────────────────
   return (
     <AppContext.Provider value={{
-      settings, captains, attendance, dayDetails,
+      settings, captains, attendance, dayDetails, workouts,
       dataLoading, syncError,
       demoMode: false, authLoading: false,
       teamVerified, isAdmin, currentCaptainId, currentCaptain,
       userMode, athleteName,
-      darkMode, onboardingDone,
-      CAPTAIN_COLORS,
-      verifyTeamCode, verifyAdminCode, logoutAdmin,
-      verifyCaptainCode, selectAthleteMode,
+      athleteOnboarded, captainOnboarded,
+      activeWeekIndex,
+      darkMode, CAPTAIN_COLORS, LOCATIONS,
+      verifyTeamCode, verifyAdminCode, verifyCaptainCode, logoutAdmin,
+      selectAthleteMode, selectCaptain,
       setCurrentCaptainId: selectCaptain,
-      selectCaptain,
-      deselectCaptain, toggleDarkMode, markOnboardingDone,
+      deselectCaptain, toggleDarkMode,
+      markAthleteOnboarded, markCaptainOnboarded,
       addCaptain, removeCaptain, updateCaptain,
       setDayDetail, clearDayDetail,
       toggleAttendance, isCaptainAttending,
       getAttendingCaptains, isDayCancelled,
-      updateSettings,
+      updateSettings, updateOnboarding,
       getWeekStats, getCaptainStats,
     }}>
       {children}
