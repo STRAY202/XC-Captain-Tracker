@@ -1,18 +1,20 @@
 import { useState, useMemo } from 'react';
-import { Moon, Sun, LogOut, Zap, CalendarCheck, Shield } from 'lucide-react';
+import { Moon, Sun, LogOut, Zap, CalendarCheck, Shield, BarChart2 } from 'lucide-react';
 import { useApp } from './context/AppContext';
 import { generateSchedule, today, fromDateStr } from './utils/dates';
 import AccessGate from './components/AccessGate';
 import AthleteDashboard from './components/AthleteDashboard';
-import CaptainWeekCard from './components/CaptainWeekCard';
+import Dashboard from './components/Dashboard';
+import SchedulePage from './components/SchedulePage';
 import AdminPanel from './components/AdminPanel';
 import RoleOnboarding from './components/RoleOnboarding';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // ── Captain tab bar ────────────────────────────────────────────────────────────
 const CAP_TABS = [
-  { id: 'availability', label: 'Availability', Icon: CalendarCheck },
-  { id: 'admin',        label: 'Admin',        Icon: Shield },
+  { id: 'overview',  label: 'Overview',  Icon: BarChart2 },
+  { id: 'schedule',  label: 'Schedule',  Icon: CalendarCheck },
+  { id: 'admin',     label: 'Admin',     Icon: Shield },
 ];
 
 // ── Minimal top header ─────────────────────────────────────────────────────────
@@ -74,9 +76,8 @@ export default function App() {
     syncError,
   } = useApp();
 
-  const [captainTab,    setCaptainTab]    = useState('availability');
+  const [captainTab,    setCaptainTab]    = useState('overview');
   const [showAdmin,     setShowAdmin]     = useState(false);
-  const [showAllWeeks,  setShowAllWeeks]  = useState(false);
   const [syncDismissed, setSyncDismissed] = useState(false);
 
   const isLoading = authLoading || (dataLoading && captains.length === 0);
@@ -96,13 +97,6 @@ export default function App() {
     });
     return idx >= 0 ? idx : 0;
   }, [weeks, todayStr]);
-
-  const visibleWeeks = useMemo(() => {
-    if (showAllWeeks) return weeks;
-    const s = Math.max(0, currentWeekIndex - 1);
-    const e = Math.min(weeks.length - 1, currentWeekIndex + 3);
-    return weeks.slice(s, e + 1);
-  }, [weeks, currentWeekIndex, showAllWeeks]);
 
   // ── Guards ──────────────────────────────────────────────────────────────────
   if (isLoading) {
@@ -140,7 +134,7 @@ export default function App() {
     ? '#10b981'
     : currentCaptain?.color || '#6b7280';
 
-  // ── Athlete view (no tabs, read-only) ───────────────────────────────────────
+  // ── Athlete view (read-only hub) ─────────────────────────────────────────────
   if (userMode === 'athlete') {
     return (
       <ErrorBoundary>
@@ -177,7 +171,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gray-950">
+      <div className="min-h-screen bg-gray-950 dark:bg-gray-950">
         <Header
           title={settings.teamName}
           subtitle={`Captain · ${currentCaptain?.name || 'Admin'}`}
@@ -198,32 +192,14 @@ export default function App() {
             </div>
           )}
 
-          {/* ── Availability tab ───────────────────────────────────────────── */}
-          {captainTab === 'availability' && (
-            <div className="px-4 pt-4 space-y-3">
-              <div className="mb-2">
-                <h2 className="text-base font-extrabold text-white">Your Availability</h2>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Mark days you can attend · the app auto-picks top 3 for athletes
-                </p>
-              </div>
-
-              {visibleWeeks.map(week => (
-                <CaptainWeekCard
-                  key={week.id}
-                  week={week}
-                  isCurrentWeek={week.index === currentWeekIndex}
-                  weekIndex={week.index}
-                />
-              ))}
-
-              <button
-                onClick={() => setShowAllWeeks(s => !s)}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gray-900 border border-gray-800 text-sm font-semibold text-gray-500 hover:bg-gray-800/60 transition-all active:scale-[0.98]"
-              >
-                {showAllWeeks ? '↑ Show fewer' : `↓ All ${weeks.length} weeks`}
-              </button>
+          {captainTab === 'overview' && (
+            <div className="pt-4">
+              <Dashboard weeks={weeks} currentWeekIndex={currentWeekIndex} />
             </div>
+          )}
+
+          {captainTab === 'schedule' && (
+            <SchedulePage weeks={weeks} currentWeekIndex={currentWeekIndex} />
           )}
         </div>
 
