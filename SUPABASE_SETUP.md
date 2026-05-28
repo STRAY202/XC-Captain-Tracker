@@ -47,6 +47,12 @@ CREATE TABLE IF NOT EXISTS captains (
   "order" INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+INSERT INTO captains (id, name, color, "order") VALUES
+  ('cap_austin',   'Austin',   '#10b981', 0),
+  ('cap_cash',     'Cash',     '#3b82f6', 1),
+  ('cap_duncan',   'Duncan',   '#f59e0b', 2),
+  ('cap_harrison', 'Harrison', '#ef4444', 3)
+ON CONFLICT (id) DO NOTHING;
 
 -- Attendance (one row per captain per practice day)
 CREATE TABLE IF NOT EXISTS attendance (
