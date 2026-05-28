@@ -127,16 +127,38 @@ export function useApp() {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
+// Bump this string any time you want all users to get a fresh onboarding + dark-mode reset.
+const APP_VERSION = 'v2';
+
 export function AppProvider({ children }) {
+  // Version migration: runs synchronously inside lazy initialisers so there is no flash.
+  // If the stored version doesn't match APP_VERSION we treat onboarding as unseen and
+  // reset dark mode back to the default (dark).  Captain / team login is preserved.
+  const versionOk = safeGet('xc-app-version') === APP_VERSION;
+
   // localStorage-backed UI/session state (device preferences only)
   const [teamVerified, setTeamVerified] = useState(() => safeGet(STORAGE.TEAM_VERIFIED) === 'true');
   const [isAdmin, setIsAdmin] = useState(() => safeSessionGet(STORAGE.ADMIN) === 'true');
   const [currentCaptainId, setCurrentCaptainIdState] = useState(() => safeGet(STORAGE.CAPTAIN_ID) || null);
   const [darkMode, setDarkMode] = useState(() => {
+    if (!versionOk) return true;           // always start dark after a version bump
     const saved = safeGet(STORAGE.DARK_MODE);
     return saved === null ? true : saved === 'true';
   });
-  const [onboardingDone, setOnboardingDone] = useState(() => safeGet(STORAGE.ONBOARDING_DONE) === 'true');
+  const [onboardingDone, setOnboardingDone] = useState(() => {
+    if (!versionOk) return false;          // always show tour after a version bump
+    return safeGet(STORAGE.ONBOARDING_DONE) === 'true';
+  });
+
+  // Persist the migration so the reset only happens once per version
+  useEffect(() => {
+    if (safeGet('xc-app-version') !== APP_VERSION) {
+      safeRemove(STORAGE.ONBOARDING_DONE);
+      safeSet(STORAGE.DARK_MODE, 'true');
+      safeSet('xc-app-version', APP_VERSION);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Shared cloud data state
   const [settings, setSettings]     = useState(DEFAULT_SETTINGS);
