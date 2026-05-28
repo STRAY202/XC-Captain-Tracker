@@ -3,7 +3,7 @@ import React, {
   useCallback, useRef, useMemo
 } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase';
-import { CAPTAIN_COLORS } from '../utils/seedData';
+import { CAPTAIN_COLORS, DEFAULT_CAPTAINS } from '../utils/seedData';
 
 // ── Safe localStorage (iOS Safari private mode & storage quota) ───────────────
 function safeGet(key) {
@@ -162,7 +162,7 @@ export function AppProvider({ children }) {
 
   // Shared cloud data state
   const [settings, setSettings]     = useState(DEFAULT_SETTINGS);
-  const [captains, setCaptains]     = useState([]);
+  const [captains, setCaptains]     = useState(DEFAULT_CAPTAINS);
   const [attendance, setAttendance] = useState({});
   const [dayDetails, setDayDetails] = useState({});
   const [dataLoading, setDataLoading] = useState(true);
@@ -205,7 +205,6 @@ export function AppProvider({ children }) {
     let channel;
 
     async function seedDatabase() {
-      const { DEFAULT_CAPTAINS } = await import('../utils/seedData');
       await supabase.from('settings').insert({ id: 'main', ...settingsToDB(DEFAULT_SETTINGS) });
       for (let i = 0; i < DEFAULT_CAPTAINS.length; i++) {
         await supabase.from('captains').insert({
