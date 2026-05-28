@@ -104,7 +104,15 @@ function TeamCodeScreen({ onSuccess }) {
 
 // ── Captain selection ──────────────────────────────────────────────────────────
 function CaptainSelectScreen() {
-  const { captains, selectCaptain, settings } = useApp();
+  const { captains, dataLoading, syncError, selectCaptain, verifyAdminCode, settings } = useApp();
+
+  const handleAdminLogin = () => {
+    const code = window.prompt('Enter admin code:');
+    if (!code) return;
+    const ok = verifyAdminCode(code.trim());
+    if (ok) selectCaptain('admin');
+    else window.alert('Wrong admin code.');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
@@ -134,12 +142,36 @@ function CaptainSelectScreen() {
           </p>
 
           {captains.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                <span className="text-2xl animate-pulse">🏃</span>
+            dataLoading ? (
+              /* Still fetching from Supabase */
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                  <span className="text-2xl animate-pulse">🏃</span>
+                </div>
+                <p className="text-sm text-gray-400 dark:text-gray-500">Loading team…</p>
               </div>
-              <p className="text-sm text-gray-400 dark:text-gray-500">Loading team…</p>
-            </div>
+            ) : (
+              /* Loaded but empty — Supabase not set up or no captains added yet */
+              <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-4">
+                <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center">
+                  <span className="text-2xl">⚙️</span>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">No captains found</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed">
+                    {syncError
+                      ? 'Could not connect to the database. Make sure the Supabase env vars and SQL schema are set up, then reload.'
+                      : 'An admin needs to add captains first. Log in as admin below.'}
+                  </p>
+                </div>
+                <button
+                  onClick={handleAdminLogin}
+                  className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 underline underline-offset-2 active:opacity-70"
+                >
+                  Log in as admin
+                </button>
+              </div>
+            )
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {[...captains].sort((a, b) => a.name.localeCompare(b.name)).map((captain) => (
