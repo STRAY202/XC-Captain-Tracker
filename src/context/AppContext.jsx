@@ -25,6 +25,10 @@ function safeSet(key, value) {
   try { window.localStorage.setItem(key, String(value)); }
   catch {}
 }
+function safeGetJSON(key) {
+  try { const v = window.localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+  catch { return null; }
+}
 function safeRemove(key) {
   try { window.localStorage.removeItem(key); }
   catch {}
@@ -423,10 +427,34 @@ export function AppProvider({ children }) {
   const selectAthleteMode = useCallback((name) => {
     const slug = name.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     const id   = `athlete_${slug}`;
+    const now  = new Date().toISOString();
+
+    // Track login stats locally
+    const statsKey = `xc-ath-stats-${id}`;
+    const existing = safeGetJSON(statsKey) || {};
+    const stats = {
+      id,
+      name:       name.trim(),
+      firstLogin: existing.firstLogin || now,
+      lastLogin:  now,
+      loginCount: (existing.loginCount || 0) + 1,
+    };
+    safeSet(statsKey, JSON.stringify(stats));
+
+    // Sync to settings so captains can see athlete activity
+    const athletes = [...(settingsRef.current.onboarding?.athletes || [])];
+    const idx = athletes.findIndex(a => a.id === id);
+    if (idx >= 0) {
+      athletes[idx] = { ...athletes[idx], name: stats.name, lastLogin: now, loginCount: stats.loginCount };
+    } else {
+      athletes.push(stats);
+    }
+    updateOnboarding({ athletes });
+
     setCurrentCaptainIdState(id); setUserMode('athlete'); setAthleteName(name.trim());
     safeSet(STORAGE.CAPTAIN_ID, id); safeSet(STORAGE.USER_MODE, 'athlete');
     safeSet(STORAGE.ATHLETE_NAME, name.trim());
-  }, []);
+  }, [updateOnboarding]);
 
   const markAthleteOnboarded = useCallback(() => {
     setAthleteOnboarded(true); safeSet(STORAGE.ATHLETE_ONBOARDED, 'true');

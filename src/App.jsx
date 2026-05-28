@@ -1,11 +1,10 @@
 import { useState, useMemo } from 'react';
-import { LogOut, Zap, BarChart2, Users, Eye, HelpCircle, Settings } from 'lucide-react';
+import { LogOut, Zap, BarChart2, Eye, HelpCircle, Settings } from 'lucide-react';
 import { useApp } from './context/AppContext';
 import { generateSchedule, today, fromDateStr } from './utils/dates';
 import AccessGate from './components/AccessGate';
 import AthleteDashboard from './components/AthleteDashboard';
 import CaptainDashboard from './components/CaptainDashboard';
-import CaptainHub from './components/CaptainHub';
 import SettingsPanel from './components/SettingsPanel';
 import RoleOnboarding from './components/RoleOnboarding';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -13,7 +12,6 @@ import ErrorBoundary from './components/ErrorBoundary';
 // ── Captain tab bar ────────────────────────────────────────────────────────────
 const CAP_TABS = [
   { id: 'dashboard', label: 'Dashboard', Icon: BarChart2 },
-  { id: 'hub',       label: 'Hub',       Icon: Users },
   { id: 'athletes',  label: 'Athletes',  Icon: Eye },
 ];
 
@@ -176,7 +174,13 @@ export default function App() {
             <AthleteDashboard weeks={weeks} />
           </div>
 
-          {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+          {showSettings && (
+            <SettingsPanel
+              athleteMode
+              onClose={() => setShowSettings(false)}
+              onReplayOnboarding={() => { setShowSettings(false); setShowOnboardingReplay(true); }}
+            />
+          )}
           {showOnboardingReplay && (
             <RoleOnboarding
               role={onboardingRole}
@@ -214,10 +218,6 @@ export default function App() {
 
           {captainTab === 'dashboard' && (
             <CaptainDashboard weeks={weeks} currentWeekIndex={currentWeekIndex} />
-          )}
-
-          {captainTab === 'hub' && (
-            <CaptainHub weeks={weeks} currentWeekIndex={currentWeekIndex} />
           )}
 
           {captainTab === 'athletes' && (

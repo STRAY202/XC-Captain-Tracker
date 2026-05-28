@@ -277,7 +277,7 @@ function SlideEditor({ slidesKey, label }) {
 }
 
 // ── Main Settings Panel ────────────────────────────────────────────────────────
-export default function SettingsPanel({ onClose }) {
+export default function SettingsPanel({ onClose, athleteMode = false, onReplayOnboarding }) {
   const {
     settings, captains, dayDetails,
     updateSettings, updateOnboarding, addCaptain, removeCaptain, updateCaptain,
@@ -382,6 +382,47 @@ export default function SettingsPanel({ onClose }) {
       </div>
 
       {/* Scrollable body */}
+      {athleteMode ? (
+        <div className="overflow-y-auto flex-1 px-4 py-4 space-y-3 no-scrollbar">
+          <Section
+            title="Appearance"
+            icon={darkMode ? Moon : Sun}
+            iconBg="bg-indigo-100 dark:bg-indigo-900/40"
+            iconColor="text-indigo-600 dark:text-indigo-400"
+            defaultOpen={true}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Dark Mode</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Toggle between light and dark theme</p>
+              </div>
+              <button
+                onClick={toggleDarkMode}
+                className={`relative w-12 h-6 rounded-full transition-all duration-200 ${
+                  darkMode ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-gray-700'
+                }`}
+              >
+                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-200 ${
+                  darkMode ? 'left-6' : 'left-0.5'
+                }`} />
+              </button>
+            </div>
+          </Section>
+
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
+            <p className="text-sm font-bold text-gray-800 dark:text-white mb-1">Replay Onboarding</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">Review the app intro again</p>
+            <button
+              onClick={onReplayOnboarding}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-600 transition-colors active:scale-[0.98]"
+            >
+              <BookOpen size={14} /> Replay Intro
+            </button>
+          </div>
+
+          <div className="h-4 pb-safe" />
+        </div>
+      ) : (
       <div className="overflow-y-auto flex-1 px-4 py-4 space-y-3 no-scrollbar">
 
         {/* ── Theme ─────────────────────────────────────────────────────────── */}
@@ -456,6 +497,47 @@ export default function SettingsPanel({ onClose }) {
               Share the sheet publicly → "Anyone with link can view". Format: Date (YYYY-MM-DD) in column A, workout in column B.
             </p>
           </Field>
+        </Section>
+
+        {/* ── Athlete Activity ──────────────────────────────────────────── */}
+        <Section
+          title="Athlete Activity"
+          icon={Users}
+          iconBg="bg-teal-100 dark:bg-teal-900/40"
+          iconColor="text-teal-600 dark:text-teal-400"
+          defaultOpen={false}
+        >
+          {(() => {
+            const athletes = settings.onboarding?.athletes || [];
+            if (athletes.length === 0) {
+              return <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-2 italic">No athlete logins yet</p>;
+            }
+            const fmt = (iso) => {
+              try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }); }
+              catch { return '—'; }
+            };
+            return (
+              <div className="space-y-2">
+                {[...athletes].sort((a, b) => (b.loginCount || 0) - (a.loginCount || 0)).map(ath => (
+                  <div key={ath.id} className="flex items-center gap-2.5 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center text-white text-xs font-black flex-shrink-0">
+                      {(ath.name || '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate">{ath.name}</p>
+                      <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                        First: {fmt(ath.firstLogin)} · Last: {fmt(ath.lastLogin)}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <span className="text-xs font-black text-emerald-500">{ath.loginCount || 1}</span>
+                      <p className="text-[9px] text-gray-400 dark:text-gray-500 uppercase tracking-wide">logins</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </Section>
 
         {/* ── Announcements ──────────────────────────────────────────────── */}
@@ -1078,6 +1160,7 @@ export default function SettingsPanel({ onClose }) {
         {/* Bottom padding */}
         <div className="h-4 pb-safe" />
       </div>
+      )}
     </div>
   );
 }

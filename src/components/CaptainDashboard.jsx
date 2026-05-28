@@ -1,14 +1,20 @@
 import { useState, useMemo } from 'react';
-import { AlertTriangle, Trophy, TrendingUp, Bell, MapPin, Zap } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { AlertTriangle, Trophy, TrendingUp, Bell, MapPin, Zap, Zap as ZapIcon } from 'lucide-react';
+import { useApp, getLocation } from '../context/AppContext';
 import { today, fromDateStr, formatShort, DAYS_SHORT } from '../utils/dates';
 import WeekCard from './WeekCard';
+import { getSelectionDetails } from '../utils/practiceSelector';
 
 export default function CaptainDashboard({ weeks, currentWeekIndex }) {
   const {
     getWeekStats, getCaptainStats, captains,
     dayDetails, attendance, settings,
   } = useApp();
+
+  const selectionDetails = useMemo(() => {
+    if (!currentWeek) return [];
+    return getSelectionDetails(currentWeek.days, attendance, captains, dayDetails, 3);
+  }, [currentWeek, attendance, captains, dayDetails]);
 
   const todayStr = today();
 
@@ -234,6 +240,71 @@ export default function CaptainDashboard({ weeks, currentWeekIndex }) {
                   <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
                     {diff === 1 ? 'tmrw' : `${diff}d`}
                   </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Voting transparency — this week's auto-selected days */}
+      {selectionDetails.length > 0 && (
+        <div>
+          <div className="mb-2">
+            <h2 className="text-base font-extrabold text-white">This Week's Picks</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Auto-selected by captain votes</p>
+          </div>
+          <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+            {selectionDetails.map((item, idx) => {
+              const d = fromDateStr(item.date);
+              const dow = d.toLocaleDateString('en-US', { weekday: 'short' });
+              const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              const loc = getLocation(dayDetails[item.date]?.location);
+              return (
+                <div
+                  key={item.date}
+                  className={`px-4 py-3 flex items-start gap-3 ${idx < selectionDetails.length - 1 ? 'border-b border-gray-800/60' : ''} ${item.isSelected ? '' : 'opacity-40'}`}
+                >
+                  {/* Selected indicator */}
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${item.isSelected ? 'bg-emerald-500' : 'bg-gray-700'}`}>
+                    {item.isSelected && <span className="text-white text-[9px] font-black">✓</span>}
+                  </div>
+
+                  {/* Day + votes */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                      <span className="text-xs font-black text-gray-200">{dow} {dateLabel}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${item.isSelected ? 'bg-emerald-500/20 text-emerald-300' : 'bg-gray-700 text-gray-500'}`}>
+                        {item.captainCount} vote{item.captainCount !== 1 ? 's' : ''}
+                      </span>
+                      {item.duncanTiebreaker && (
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 flex items-center gap-0.5">
+                          ⚡ Duncan tiebreaker
+                        </span>
+                      )}
+                      {item.isSelected && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md text-white/60 font-semibold" style={{ backgroundColor: loc.color + '33', color: loc.color }}>
+                          {loc.short}
+                        </span>
+                      )}
+                    </div>
+                    {/* Voting captains */}
+                    {item.votingCaptains.length > 0 ? (
+                      <div className="flex gap-1 flex-wrap">
+                        {item.votingCaptains.map(c => (
+                          <span
+                            key={c.id}
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                            style={{ backgroundColor: c.color + '20', color: c.color }}
+                          >
+                            {c.name.split(' ')[0]}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-gray-600">No votes yet</span>
+                    )}
+                  </div>
                 </div>
               );
             })}
