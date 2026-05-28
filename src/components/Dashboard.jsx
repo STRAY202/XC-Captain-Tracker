@@ -72,7 +72,7 @@ export default function Dashboard({ weeks, currentWeekIndex }) {
   return (
     <div className="px-4 space-y-3">
 
-      <div className="bg-gradient-hero rounded-3xl overflow-hidden shadow-card-lg">
+      <div id="tour-dashboard-hero" className="bg-gradient-hero rounded-3xl overflow-hidden shadow-card-lg">
         <div className="px-5 pt-5 pb-4">
           <div className="flex items-start justify-between mb-4">
             <div>
@@ -129,7 +129,7 @@ export default function Dashboard({ weeks, currentWeekIndex }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div id="tour-stats" className="grid grid-cols-3 gap-2">
         <div className={`rounded-2xl p-3.5 ${
           missingDays === 0 ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-amber-50 dark:bg-amber-950/40'
         }`}>

@@ -272,7 +272,7 @@ export default function App() {
           </div>
 
           {/* ── Legend ──────────────────────────────────────────────────── */}
-          <div className="flex items-center gap-4 px-4 mb-3 text-[10px] text-gray-400 dark:text-gray-500 font-medium">
+          <div id="tour-legend" className="flex items-center gap-4 px-4 mb-3 text-[10px] text-gray-400 dark:text-gray-500 font-medium">
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-md bg-emerald-500 inline-block shadow-sm" />
               You attending

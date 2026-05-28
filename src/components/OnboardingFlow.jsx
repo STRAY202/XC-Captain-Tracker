@@ -6,60 +6,78 @@ import { useApp } from '../context/AppContext';
 // and cut a spotlight hole through the dim overlay so the real UI is visible.
 const BUILT_IN_SLIDES = [
   {
+    id: 'hero',
+    icon: '📊',
+    gradient: 'from-emerald-500 to-teal-600',
+    title: 'Week Overview',
+    body: 'Shows days covered this week. You need 3 of 6 — anything more is a bonus. Red bars = uncovered, green = covered.',
+    spotlightId: 'tour-dashboard-hero',
+    spotlightPad: 5,
+    spotlightRx: 26,
+  },
+  {
+    id: 'stats',
+    icon: '🏆',
+    gradient: 'from-violet-500 to-purple-600',
+    title: 'Season Stats',
+    body: 'Missing = days still needed this week. Top = most active captain. Season = total days covered all summer.',
+    spotlightId: 'tour-stats',
+    spotlightPad: 6,
+    spotlightRx: 20,
+  },
+  {
+    id: 'legend',
+    icon: '🔑',
+    gradient: 'from-slate-500 to-gray-600',
+    title: 'Card Key',
+    body: 'Solid green = you\'re attending · Emerald border = day is covered · Plain border = still open.',
+    spotlightId: 'tour-legend',
+  },
+  {
     id: 'attendance',
     icon: '✅',
     gradient: 'from-blue-500 to-indigo-600',
-    title: 'Mark Your Attendance',
-    body: 'Tap any day card once to toggle yourself in or out of practice. It saves instantly.',
+    title: 'Mark Attendance',
+    body: 'Tap any day card to toggle yourself in or out. Saves instantly — no confirm needed.',
     spotlightId: 'tour-day-grid',
   },
   {
     id: 'coverage',
     icon: '🟢',
     gradient: 'from-green-500 to-emerald-600',
-    title: 'Coverage Counter',
-    body: 'This badge tracks how many days are covered this week. You need 3 to go green.',
+    title: 'Coverage Badge',
+    body: 'The X/3 badge turns green once 3 days are covered. Going above 3 is encouraged.',
     spotlightId: 'tour-coverage',
   },
   {
     id: 'location',
     icon: '📍',
     gradient: 'from-orange-500 to-amber-500',
-    title: 'Change Practice Location',
-    body: 'Tap Edit on any week, pick a location (Memorial, Cutler Park, or custom), then tap the days to set it.',
+    title: 'Set Practice Location',
+    body: 'Tap Edit, choose Memorial (green), Cutler Park (blue), or type a custom spot — then tap the days to apply.',
     spotlightId: 'tour-edit-btn',
-  },
-  {
-    id: 'colors',
-    icon: '🎨',
-    gradient: 'from-violet-500 to-purple-600',
-    title: 'Location Colors',
-    body: 'Green strip = Memorial · Blue = Cutler Park. See where practice is at a glance.',
-    spotlightId: 'tour-day-grid',
   },
   {
     id: 'mobile',
     icon: '📱',
     gradient: 'from-pink-500 to-rose-500',
     title: 'Works Everywhere',
-    body: 'Add this page to your home screen for one-tap access. Changes sync in real time.',
+    body: 'Add this to your home screen for one-tap access. All changes sync in real time.',
     spotlightId: null,
   },
 ];
 
 // ── Spotlight SVG overlay — dims everything except the target element ─────────
-function SpotlightOverlay({ spotlightId }) {
+function SpotlightOverlay({ spotlightId, pad = 12, rx = 18 }) {
   const [rect, setRect] = useState(null);
 
   useEffect(() => {
-    setRect(null); // clear immediately on slide change
-
+    setRect(null);
     if (!spotlightId) return;
 
     const el = document.getElementById(spotlightId);
     if (!el) return;
 
-    // Scroll element into the visible area, then read its position
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     const t = setTimeout(() => {
@@ -69,8 +87,6 @@ function SpotlightOverlay({ spotlightId }) {
 
     return () => clearTimeout(t);
   }, [spotlightId]);
-
-  const pad = 12;
 
   return (
     <svg
@@ -83,37 +99,22 @@ function SpotlightOverlay({ spotlightId }) {
           <rect width="100%" height="100%" fill="white" />
           {rect && (
             <rect
-              x={rect.x - pad}
-              y={rect.y - pad}
-              width={rect.w + pad * 2}
-              height={rect.h + pad * 2}
-              rx={16}
-              fill="black"
+              x={rect.x - pad} y={rect.y - pad}
+              width={rect.w + pad * 2} height={rect.h + pad * 2}
+              rx={rx} fill="black"
             />
           )}
         </mask>
       </defs>
 
-      {/* Dark overlay with the hole cut out */}
-      <rect
-        width="100%"
-        height="100%"
-        fill="rgba(0,0,0,0.80)"
-        mask="url(#onb-mask)"
-      />
+      <rect width="100%" height="100%" fill="rgba(0,0,0,0.82)" mask="url(#onb-mask)" />
 
-      {/* Emerald highlight ring around the spotlighted element */}
       {rect && (
         <rect
-          x={rect.x - pad}
-          y={rect.y - pad}
-          width={rect.w + pad * 2}
-          height={rect.h + pad * 2}
-          rx={16}
-          fill="none"
-          stroke="#10b981"
-          strokeWidth={2.5}
-          opacity={0.9}
+          x={rect.x - pad} y={rect.y - pad}
+          width={rect.w + pad * 2} height={rect.h + pad * 2}
+          rx={rx} fill="none"
+          stroke="#10b981" strokeWidth={2.5} opacity={0.9}
         />
       )}
     </svg>
@@ -148,7 +149,11 @@ export default function OnboardingFlow({ onComplete, isHelp = false }) {
     <div className="fixed inset-0" style={{ zIndex: 57 }}>
 
       {/* SVG spotlight overlay (pointer-events: none — purely visual) */}
-      <SpotlightOverlay spotlightId={current.spotlightId} />
+      <SpotlightOverlay
+        spotlightId={current.spotlightId}
+        pad={current.spotlightPad ?? 12}
+        rx={current.spotlightRx ?? 18}
+      />
 
       {/* Tap-anywhere-to-advance layer (covers full screen, below the card) */}
       <div
