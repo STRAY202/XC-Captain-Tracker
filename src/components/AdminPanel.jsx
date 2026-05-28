@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatShort } from '../utils/dates';
-import { WORKOUT_TYPES, getWorkoutType } from '../utils/workoutTypes';
 
 // ── Collapsible section ────────────────────────────────────────────────────────
 function Section({ title, icon: Icon, iconBg = 'bg-gray-100 dark:bg-gray-800', iconColor = 'text-gray-500', children, defaultOpen = true }) {
@@ -44,6 +43,47 @@ function Field({ label, children }) {
         {label}
       </label>
       {children}
+    </div>
+  );
+}
+
+const ADMIN_LOCATIONS = ['Memorial', 'Cutler Park'];
+function LocationPicker({ value, onChange }) {
+  const isPreset = ADMIN_LOCATIONS.includes(value);
+  const [otherText, setOtherText] = useState(!isPreset ? value : '');
+  const selected = isPreset ? value : (value ? 'other' : '');
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-1.5 flex-wrap">
+        {ADMIN_LOCATIONS.map(loc => (
+          <button key={loc} type="button"
+            onClick={() => onChange(loc)}
+            className={`text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 ${
+              selected === loc
+                ? 'bg-emerald-500 text-white shadow-sm'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+            }`}
+          >{loc}</button>
+        ))}
+        <button type="button"
+          onClick={() => { if (selected !== 'other') { setOtherText(''); onChange(''); } }}
+          className={`text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 ${
+            selected === 'other'
+              ? 'bg-emerald-500 text-white shadow-sm'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >Other…</button>
+      </div>
+      {selected === 'other' && (
+        <input type="text" value={otherText}
+          onChange={e => setOtherText(e.target.value)}
+          onBlur={() => { if (otherText.trim()) onChange(otherText.trim()); }}
+          onKeyDown={e => e.key === 'Enter' && otherText.trim() && onChange(otherText.trim())}
+          placeholder="Custom location…"
+          className="field-input"
+        />
+      )}
     </div>
   );
 }
@@ -565,11 +605,10 @@ export default function AdminPanel({ onClose }) {
                 <option value="">— Pick a date —</option>
                 {scheduleDays.map(d => {
                   const ov = dayDetails[d];
-                  const wt = ov?.workoutType ? ` ${getWorkoutType(ov.workoutType).emoji}` : '';
                   const tag = ov?.cancelled ? ' [cancelled]' : ov?.optional ? ' [optional]' : '';
                   const date = new Date(d + 'T00:00:00');
                   const label = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-                  return <option key={d} value={d}>{label}{wt}{tag}</option>;
+                  return <option key={d} value={d}>{label}{tag}</option>;
                 })}
               </select>
             </Field>
@@ -577,38 +616,12 @@ export default function AdminPanel({ onClose }) {
             {selDate && (
               <div className="space-y-3.5 bg-gray-50 dark:bg-gray-800/40 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 animate-fade-in">
 
-                {/* Workout type */}
-                <Field label="Workout Type">
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {WORKOUT_TYPES.map(w => {
-                      const active = selOverride.workoutType === w.id;
-                      return (
-                        <button
-                          key={w.id}
-                          onClick={() => setDayDetail(selDate, { workoutType: active ? null : w.id })}
-                          className={`flex items-center gap-1.5 px-2.5 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
-                            active
-                              ? 'text-white shadow-sm'
-                              : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                          style={active ? { backgroundColor: w.color } : {}}
-                        >
-                          <span>{w.emoji}</span>
-                          <span className="truncate">{w.label.split(' ')[0]}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </Field>
-
                 {/* Location */}
                 <Field label="Location">
-                  <input
-                    type="text"
+                  <LocationPicker
+                    dateStr={selDate}
                     value={selOverride.location || ''}
-                    onChange={e => setDayDetail(selDate, { location: e.target.value })}
-                    placeholder="Meeting location…"
-                    className="field-input"
+                    onChange={loc => setDayDetail(selDate, { location: loc })}
                   />
                 </Field>
 

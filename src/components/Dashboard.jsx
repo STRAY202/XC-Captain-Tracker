@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
-import { CalendarCheck, AlertTriangle, Trophy, TrendingUp, Bell, Zap } from 'lucide-react';
+import { CalendarCheck, AlertTriangle, Trophy, TrendingUp, Bell, Zap, MapPin } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { today, fromDateStr, formatShort, DAYS_SHORT } from '../utils/dates';
-import { getWorkoutType } from '../utils/workoutTypes';
 
 export default function Dashboard({ weeks, currentWeekIndex }) {
   const { getWeekStats, getCaptainStats, captains, dayDetails, attendance, settings, currentCaptainId } = useApp();
@@ -13,12 +12,10 @@ export default function Dashboard({ weeks, currentWeekIndex }) {
   const { coveredCount, totalActive, isCovered, isPartial } = weekStats;
   const missingDays = Math.max(0, settings.minCoveredDays - coveredCount);
 
-  // Top captain
   const captainStatsMap = getCaptainStats();
   const topCaptain = [...captains].sort((a, b) => (captainStatsMap[b.id] || 0) - (captainStatsMap[a.id] || 0))[0];
   const topCount   = captainStatsMap[topCaptain?.id] || 0;
 
-  // All-time covered count
   const totalCovered = useMemo(() => {
     return weeks.reduce((acc, w) => {
       const { coveredCount: c } = getWeekStats(w.days);
@@ -26,7 +23,6 @@ export default function Dashboard({ weeks, currentWeekIndex }) {
     }, 0);
   }, [weeks, getWeekStats]);
 
-  // Day coverage bars for current week
   const dayCoverageItems = useMemo(() => {
     if (!currentWeek) return [];
     return currentWeek.days.map((dateStr, di) => {
@@ -39,7 +35,6 @@ export default function Dashboard({ weeks, currentWeekIndex }) {
     });
   }, [currentWeek, dayDetails, captains, attendance, settings.minCaptainsPerDay]);
 
-  // Upcoming uncovered days (next 14 days, not cancelled, no coverage yet)
   const upcomingUncovered = useMemo(() => {
     const out = [];
     const allDays = weeks.flatMap(w => w.days);
@@ -58,7 +53,6 @@ export default function Dashboard({ weeks, currentWeekIndex }) {
     return out;
   }, [weeks, dayDetails, captains, attendance, todayStr]);
 
-  // Coverage status for hero
   const coverageStatus = isCovered ? 'Covered' : isPartial ? 'Partial' : coveredCount === 0 && totalActive > 0 ? 'Needs Help' : 'Covered';
   const statusColor = isCovered
     ? { bg: 'bg-emerald-500/20 border-emerald-500/30', text: 'text-emerald-300' }
@@ -78,10 +72,8 @@ export default function Dashboard({ weeks, currentWeekIndex }) {
   return (
     <div className="px-4 space-y-3">
 
-      {/* ── Hero card ─────────────────────────────────────────────────────── */}
       <div className="bg-gradient-hero rounded-3xl overflow-hidden shadow-card-lg">
         <div className="px-5 pt-5 pb-4">
-          {/* Top row */}
           <div className="flex items-start justify-between mb-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -101,7 +93,6 @@ export default function Dashboard({ weeks, currentWeekIndex }) {
               <p className="text-sm text-white/50 font-medium mt-0.5">days covered</p>
             </div>
 
-            {/* Status badge */}
             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border backdrop-blur-sm ${statusColor.bg}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${
                 isCovered ? 'bg-emerald-400' : isPartial ? 'bg-amber-400' : 'bg-red-400'
@@ -110,7 +101,6 @@ export default function Dashboard({ weeks, currentWeekIndex }) {
             </div>
           </div>
 
-          {/* Day coverage bars */}
           {dayCoverageItems.length > 0 && (
             <div className="flex gap-1.5">
               {dayCoverageItems.map(({ dateStr, di, status }) => (
@@ -139,72 +129,44 @@ export default function Dashboard({ weeks, currentWeekIndex }) {
         </div>
       </div>
 
-      {/* ── Stat chips row ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-2">
-        {/* Missing days */}
         <div className={`rounded-2xl p-3.5 ${
-          missingDays === 0
-            ? 'bg-emerald-50 dark:bg-emerald-950/40'
-            : 'bg-amber-50 dark:bg-amber-950/40'
+          missingDays === 0 ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-amber-50 dark:bg-amber-950/40'
         }`}>
           <div className="flex items-center gap-1.5 mb-2">
-            <AlertTriangle size={12} className={
-              missingDays === 0
-                ? 'text-emerald-500 dark:text-emerald-400'
-                : 'text-amber-500 dark:text-amber-400'
-            } />
+            <AlertTriangle size={12} className={missingDays === 0 ? 'text-emerald-500' : 'text-amber-500'} />
             <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Missing</span>
           </div>
           <span className={`text-2xl font-black leading-none block ${
-            missingDays === 0
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : 'text-amber-600 dark:text-amber-400'
-          }`}>
-            {missingDays}
-          </span>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-            day{missingDays !== 1 ? 's' : ''} needed
-          </p>
+            missingDays === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
+          }`}>{missingDays}</span>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">day{missingDays !== 1 ? 's' : ''} needed</p>
         </div>
 
-        {/* Top captain */}
         <div className="rounded-2xl p-3.5 bg-violet-50 dark:bg-violet-950/40">
           <div className="flex items-center gap-1.5 mb-2">
             <Trophy size={12} className="text-violet-500 dark:text-violet-400" />
             <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Top</span>
           </div>
           <div className="flex items-center gap-1.5">
-            {topCaptain && (
-              <div
-                className="w-3.5 h-3.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: topCaptain.color }}
-              />
-            )}
+            {topCaptain && <div className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: topCaptain.color }} />}
             <span className="text-sm font-black text-violet-600 dark:text-violet-400 leading-none truncate">
               {topCaptain?.name?.split(' ')[0] || '—'}
             </span>
           </div>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-            {topCount > 0 ? `${topCount} days` : 'no data'}
-          </p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{topCount > 0 ? `${topCount} days` : 'no data'}</p>
         </div>
 
-        {/* Season total */}
         <div className="rounded-2xl p-3.5 bg-blue-50 dark:bg-blue-950/40">
           <div className="flex items-center gap-1.5 mb-2">
             <TrendingUp size={12} className="text-blue-500 dark:text-blue-400" />
             <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Season</span>
           </div>
-          <span className="text-2xl font-black text-blue-600 dark:text-blue-400 leading-none block">
-            {totalCovered}
-          </span>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-            days covered
-          </p>
+          <span className="text-2xl font-black text-blue-600 dark:text-blue-400 leading-none block">{totalCovered}</span>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">days covered</p>
         </div>
       </div>
 
-      {/* ── Uncovered days alert ────────────────────────────────────────────── */}
       {upcomingUncovered.length > 0 && (
         <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 animate-fade-in">
           <div className="flex items-center gap-2 mb-3">
@@ -217,15 +179,15 @@ export default function Dashboard({ weeks, currentWeekIndex }) {
           </div>
           <div className="flex flex-wrap gap-2">
             {upcomingUncovered.map(({ date, diff }) => {
-              const wt = getWorkoutType(dayDetails[date]?.workoutType);
+              const loc = dayDetails[date]?.location;
               return (
                 <div
                   key={date}
                   className="flex items-center gap-1.5 bg-white dark:bg-gray-900 px-3 py-2 rounded-xl border border-amber-200 dark:border-amber-800 shadow-sm"
                 >
-                  <span className="text-base">{wt.emoji}</span>
+                  <MapPin size={11} className="text-emerald-500 flex-shrink-0" />
                   <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">
-                    {formatShort(date)}
+                    {formatShort(date)}{loc ? ` · ${loc}` : ''}
                   </span>
                   <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
                     {diff === 1 ? 'tmrw' : `${diff}d`}
