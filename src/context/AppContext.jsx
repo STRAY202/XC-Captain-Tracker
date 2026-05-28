@@ -157,12 +157,17 @@ export function AppProvider({ children }) {
   const [athleteName,     setAthleteName]     = useState(() => safeGet(STORAGE.ATHLETE_NAME) || '');
 
   // Role-specific onboarding flags
-  const [athleteOnboarded, setAthleteOnboarded] = useState(() =>
-    versionOk && safeGet(STORAGE.ATHLETE_ONBOARDED) === 'true'
-  );
-  const [captainOnboarded, setCaptainOnboarded] = useState(() =>
-    versionOk && safeGet(STORAGE.CAPTAIN_ONBOARDED) === 'true'
-  );
+  // Existing sessions skip onboarding — only new sign-ins go through it
+  const [athleteOnboarded, setAthleteOnboarded] = useState(() => {
+    const hasSession = safeGet(STORAGE.CAPTAIN_ID) !== null;
+    if (hasSession) return true;
+    return safeGet(STORAGE.ATHLETE_ONBOARDED) === 'true';
+  });
+  const [captainOnboarded, setCaptainOnboarded] = useState(() => {
+    const hasSession = safeGet(STORAGE.CAPTAIN_ID) !== null;
+    if (hasSession) return true;
+    return safeGet(STORAGE.CAPTAIN_ONBOARDED) === 'true';
+  });
 
   const [darkMode, setDarkMode] = useState(() => {
     if (!versionOk) return true;
