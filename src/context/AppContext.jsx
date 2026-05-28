@@ -234,23 +234,29 @@ export function AppProvider({ children }) {
 
         clearTimeout(failsafe);
 
+        // Throw on any table error so the catch block preserves DEFAULT_CAPTAINS
         if (sRes.error) throw sRes.error;
+        if (cRes.error) throw cRes.error;
 
         if (!sRes.data) {
+          // Fresh DB — seed settings + default captains then reload
           await seedDatabase();
           const [s2, c2] = await Promise.all([
             supabase.from('settings').select('*').eq('id', 'main').single(),
             supabase.from('captains').select('*').order('order', { ascending: true }),
           ]);
           if (s2.data) setSettings(dbToSettings(s2.data));
-          if (c2.data) setCaptains(c2.data.map(r => ({ id: r.id, name: r.name, color: r.color, order: r.order })));
+          if (c2.data?.length) setCaptains(c2.data.map(r => ({ id: r.id, name: r.name, color: r.color, order: r.order })));
         } else {
           setSettings(dbToSettings(sRes.data));
-          setCaptains((cRes.data || []).map(r => ({ id: r.id, name: r.name, color: r.color, order: r.order })));
+          // Only overwrite captains if Supabase actually returned some — otherwise keep defaults
+          if (cRes.data?.length) {
+            setCaptains(cRes.data.map(r => ({ id: r.id, name: r.name, color: r.color, order: r.order })));
+          }
         }
 
-        setAttendance(dbToAttendance(aRes.data || []));
-        setDayDetails(dbToDayDetails(dRes.data || []));
+        if (aRes.data?.length) setAttendance(dbToAttendance(aRes.data));
+        if (dRes.data?.length) setDayDetails(dbToDayDetails(dRes.data));
         setDataLoading(false);
       } catch (err) {
         clearTimeout(failsafe);
