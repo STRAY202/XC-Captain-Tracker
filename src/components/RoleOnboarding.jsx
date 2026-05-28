@@ -17,7 +17,7 @@ const ATHLETE_SLIDES = [
   {
     icon: '📍',
     title: 'Times & Locations',
-    body: 'Every practice card shows the time, location (Memorial, Cutler, Charles River, or Charles Peninsula), and a live weather forecast.',
+    body: 'Every practice card shows the time, location (Memorial, Cutler, or Charles River Peninsula), and a live weather forecast.',
     gradient: 'from-violet-500 to-purple-600',
   },
   {
@@ -50,7 +50,7 @@ const CAPTAIN_SLIDES = [
   {
     icon: '📍',
     title: 'Set Location',
-    body: 'When you mark a day as available, choose a location: Memorial, Cutler, Charles River, or Charles Peninsula. Athletes see the final synced location.',
+    body: 'When you mark a day as available, choose a location: Memorial, Cutler, or Charles River Peninsula. Athletes see the final synced location.',
     gradient: 'from-orange-500 to-amber-500',
   },
   {
