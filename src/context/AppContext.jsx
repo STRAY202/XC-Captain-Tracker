@@ -65,7 +65,7 @@ const STORAGE = {
   CAPTAIN_ID:      'xc-captain',
   ADMIN:           'xc-admin',
   DARK_MODE:       'xc-dark',
-  DEMO:            'xc-demo-v3',
+  DEMO:            'xc-demo-v4',
   ONBOARDING_DONE: 'xc-onboarding',
 };
 
@@ -156,17 +156,17 @@ export function AppProvider({ children }) {
       setAttendance(saved.attendance || {});
       setDayDetails(saved.dayDetails || {});
     } else {
-      // First visit: seed demo data
-      const seed = generateSeedData(DEFAULT_SETTINGS.startDate);
+      // First visit: seed captains only, everything else starts empty
+      const seed = generateSeedData();
       setSettings(DEFAULT_SETTINGS);
       setCaptains(seed.captains);
-      setAttendance(seed.attendance);
-      setDayDetails(seed.dayDetails);
+      setAttendance({});
+      setDayDetails({});
       saveDemo({
         settings:   DEFAULT_SETTINGS,
         captains:   seed.captains,
-        attendance: seed.attendance,
-        dayDetails: seed.dayDetails,
+        attendance: {},
+        dayDetails: {},
       });
     }
     setDataLoading(false);
@@ -177,10 +177,10 @@ export function AppProvider({ children }) {
     if (demoMode || !dataLoading) return;
     const t = setTimeout(() => {
       console.error('[AppContext] Firebase load timed out after 10s — falling back to demo data');
-      const seed = generateSeedData(DEFAULT_SETTINGS.startDate);
+      const seed = generateSeedData();
       setCaptains(seed.captains);
-      setAttendance(seed.attendance);
-      setDayDetails(seed.dayDetails);
+      setAttendance({});
+      setDayDetails({});
       setDataLoading(false);
       setLoadError(true);
     }, 10000);
@@ -268,14 +268,12 @@ export function AppProvider({ children }) {
 
   /* ── First-run Firebase initialization ───────────────────────────────── */
   async function initDatabase() {
-    const seed = generateSeedData(DEFAULT_SETTINGS.startDate);
+    const seed = generateSeedData();
     const batch = writeBatch(db);
     batch.set(doc(db, 'config', 'main'), { ...DEFAULT_SETTINGS, createdAt: serverTimestamp() });
     seed.captains.forEach((cap, i) => {
       batch.set(doc(db, 'captains', cap.id), { name: cap.name, color: cap.color, order: i, createdAt: serverTimestamp() });
     });
-    Object.entries(seed.dayDetails).forEach(([d, v]) => batch.set(doc(db, 'dayDetails', d), { ...v, updatedAt: serverTimestamp() }));
-    Object.entries(seed.attendance).forEach(([d, v]) => batch.set(doc(db, 'attendance', d), { ...v, updatedAt: serverTimestamp() }));
     await batch.commit();
   }
 
