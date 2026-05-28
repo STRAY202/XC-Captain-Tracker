@@ -8,10 +8,9 @@ import { fetchWorkouts } from '../utils/sheets';
 
 // ── Locations ─────────────────────────────────────────────────────────────────
 export const LOCATIONS = [
-  { id: 'Memorial',  label: 'Memorial',         short: 'Memorial',  color: '#10b981' },
-  { id: 'Cutler',    label: 'Cutler Park',       short: 'Cutler',    color: '#3b82f6' },
-  { id: 'Charles',   label: 'Charles River',     short: 'Charles',   color: '#8b5cf6' },
-  { id: 'Peninsula', label: 'Charles Peninsula', short: 'Peninsula', color: '#6366f1' },
+  { id: 'Memorial',  label: 'Memorial',              short: 'Memorial',  color: '#10b981' },
+  { id: 'Cutler',    label: 'Cutler Park',            short: 'Cutler',    color: '#3b82f6' },
+  { id: 'Peninsula', label: 'Charles River Peninsula',short: 'Peninsula', color: '#8b5cf6' },
 ];
 export function getLocation(id) {
   return LOCATIONS.find(l => l.id === id || l.label === id) ?? LOCATIONS[0];
