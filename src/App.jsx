@@ -1,49 +1,64 @@
 import { useState, useMemo } from 'react';
-import { Moon, Sun, LogOut, Zap, CalendarCheck, Shield, BarChart2 } from 'lucide-react';
+import { LogOut, Zap, BarChart2, Users, Eye, HelpCircle, Settings } from 'lucide-react';
 import { useApp } from './context/AppContext';
 import { generateSchedule, today, fromDateStr } from './utils/dates';
 import AccessGate from './components/AccessGate';
 import AthleteDashboard from './components/AthleteDashboard';
-import Dashboard from './components/Dashboard';
-import SchedulePage from './components/SchedulePage';
-import AdminPanel from './components/AdminPanel';
+import CaptainDashboard from './components/CaptainDashboard';
+import CaptainHub from './components/CaptainHub';
+import SettingsPanel from './components/SettingsPanel';
 import RoleOnboarding from './components/RoleOnboarding';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // ── Captain tab bar ────────────────────────────────────────────────────────────
 const CAP_TABS = [
-  { id: 'overview',  label: 'Overview',  Icon: BarChart2 },
-  { id: 'schedule',  label: 'Schedule',  Icon: CalendarCheck },
-  { id: 'admin',     label: 'Admin',     Icon: Shield },
+  { id: 'dashboard', label: 'Dashboard', Icon: BarChart2 },
+  { id: 'hub',       label: 'Hub',       Icon: Users },
+  { id: 'athletes',  label: 'Athletes',  Icon: Eye },
 ];
 
-// ── Minimal top header ─────────────────────────────────────────────────────────
-function Header({ title, subtitle, chipLabel, chipColor, onLogout, darkMode, onToggleDark }) {
+// ── Top Header ─────────────────────────────────────────────────────────────────
+function Header({
+  title, chipLabel, chipColor,
+  onLogout, onHelp, onSettings,
+}) {
   return (
     <div className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/60">
       <div className="flex items-center justify-between px-4 py-3 pt-safe max-w-lg mx-auto">
+        {/* Left: brand */}
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center flex-shrink-0 shadow-lg">
             <Zap size={14} className="text-white" fill="white" />
           </div>
-          <div className="min-w-0">
-            <h1 className="text-sm font-extrabold text-white truncate leading-tight">{title}</h1>
-            <p className="text-[10px] text-gray-500 font-medium leading-none mt-0.5">{subtitle}</p>
-          </div>
+          <h1 className="text-sm font-extrabold text-white truncate leading-tight">{title}</h1>
         </div>
 
+        {/* Right: actions */}
         <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+          {/* Help / onboarding replay */}
           <button
-            onClick={onToggleDark}
+            onClick={onHelp}
             className="w-8 h-8 rounded-xl bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition-all active:scale-90"
+            title="How to use this app"
           >
-            {darkMode ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} className="text-gray-400" />}
+            <HelpCircle size={14} className="text-gray-400" />
           </button>
 
+          {/* Settings */}
+          <button
+            onClick={onSettings}
+            className="w-8 h-8 rounded-xl bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition-all active:scale-90"
+            title="Settings"
+          >
+            <Settings size={14} className="text-gray-400" />
+          </button>
+
+          {/* Profile chip / logout */}
           <button
             onClick={onLogout}
             className="flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full min-h-[34px] transition-all active:scale-90 hover:opacity-80"
             style={{ backgroundColor: chipColor + '22' }}
+            title="Log out"
           >
             <div
               className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-extrabold"
@@ -70,15 +85,16 @@ export default function App() {
     currentCaptainId, currentCaptain,
     userMode, athleteName,
     athleteOnboarded, captainOnboarded,
-    darkMode, toggleDarkMode,
+    darkMode,
     deselectCaptain,
     markAthleteOnboarded, markCaptainOnboarded,
     syncError,
   } = useApp();
 
-  const [captainTab,    setCaptainTab]    = useState('overview');
-  const [showAdmin,     setShowAdmin]     = useState(false);
-  const [syncDismissed, setSyncDismissed] = useState(false);
+  const [captainTab,           setCaptainTab]           = useState('dashboard');
+  const [showSettings,         setShowSettings]         = useState(false);
+  const [showOnboardingReplay, setShowOnboardingReplay] = useState(false);
+  const [syncDismissed,        setSyncDismissed]        = useState(false);
 
   const isLoading = authLoading || (dataLoading && captains.length === 0);
 
@@ -134,19 +150,20 @@ export default function App() {
     ? '#10b981'
     : currentCaptain?.color || '#6b7280';
 
-  // ── Athlete view (read-only hub) ─────────────────────────────────────────────
+  const onboardingRole = userMode === 'athlete' ? 'athlete' : 'captain';
+
+  // ── Athlete view ─────────────────────────────────────────────────────────────
   if (userMode === 'athlete') {
     return (
       <ErrorBoundary>
         <div className="min-h-screen bg-gray-950">
           <Header
             title={settings.teamName}
-            subtitle="Athlete · Schedule"
             chipLabel={chipLabel}
             chipColor={chipColor}
             onLogout={deselectCaptain}
-            darkMode={darkMode}
-            onToggleDark={toggleDarkMode}
+            onHelp={() => setShowOnboardingReplay(true)}
+            onSettings={() => setShowSettings(true)}
           />
           <div className="max-w-lg mx-auto pb-8">
             {syncError && !syncDismissed && (
@@ -158,28 +175,31 @@ export default function App() {
             )}
             <AthleteDashboard weeks={weeks} />
           </div>
+
+          {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+          {showOnboardingReplay && (
+            <RoleOnboarding
+              role={onboardingRole}
+              isReplay={true}
+              onComplete={() => setShowOnboardingReplay(false)}
+            />
+          )}
         </div>
       </ErrorBoundary>
     );
   }
 
   // ── Captain / Admin view ────────────────────────────────────────────────────
-  const handleTabChange = (id) => {
-    if (id === 'admin') { setShowAdmin(true); return; }
-    setCaptainTab(id);
-  };
-
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-gray-950 dark:bg-gray-950">
         <Header
           title={settings.teamName}
-          subtitle={`Captain · ${currentCaptain?.name || 'Admin'}`}
           chipLabel={chipLabel}
           chipColor={chipColor}
           onLogout={deselectCaptain}
-          darkMode={darkMode}
-          onToggleDark={toggleDarkMode}
+          onHelp={() => setShowOnboardingReplay(true)}
+          onSettings={() => setShowSettings(true)}
         />
 
         <div className="max-w-lg mx-auto pb-24">
@@ -192,14 +212,18 @@ export default function App() {
             </div>
           )}
 
-          {captainTab === 'overview' && (
-            <div className="pt-4">
-              <Dashboard weeks={weeks} currentWeekIndex={currentWeekIndex} />
-            </div>
+          {captainTab === 'dashboard' && (
+            <CaptainDashboard weeks={weeks} currentWeekIndex={currentWeekIndex} />
           )}
 
-          {captainTab === 'schedule' && (
-            <SchedulePage weeks={weeks} currentWeekIndex={currentWeekIndex} />
+          {captainTab === 'hub' && (
+            <CaptainHub weeks={weeks} currentWeekIndex={currentWeekIndex} />
+          )}
+
+          {captainTab === 'athletes' && (
+            <div className="pt-4">
+              <AthleteDashboard weeks={weeks} />
+            </div>
           )}
         </div>
 
@@ -211,7 +235,7 @@ export default function App() {
               return (
                 <button
                   key={id}
-                  onClick={() => handleTabChange(id)}
+                  onClick={() => setCaptainTab(id)}
                   className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 transition-all active:scale-95 ${
                     isActive ? 'text-emerald-400' : 'text-gray-600'
                   }`}
@@ -224,8 +248,15 @@ export default function App() {
           </div>
         </div>
 
-        {/* ── Admin panel modal ───────────────────────────────────────────────── */}
-        {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
+        {/* ── Overlays ────────────────────────────────────────────────────────── */}
+        {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+        {showOnboardingReplay && (
+          <RoleOnboarding
+            role={onboardingRole}
+            isReplay={true}
+            onComplete={() => setShowOnboardingReplay(false)}
+          />
+        )}
       </div>
     </ErrorBoundary>
   );

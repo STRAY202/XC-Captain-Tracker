@@ -63,6 +63,8 @@ export const DEFAULT_SETTINGS = {
     weatherLon:      -71.06,
     sheetsUrl:       '',
     activeWeekIndex: 0,
+    athleteSlides:   null,
+    captainSlides:   null,
   },
 };
 
