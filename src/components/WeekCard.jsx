@@ -23,14 +23,16 @@ function WorkoutInput({ dateStr, initialValue, onSave }) {
 
 // ── Location config ───────────────────────────────────────────────────────────
 const LOC = {
-  memorial: { label: 'Memorial',    short: 'Memorial', color: '#10b981' },
-  cutler:   { label: 'Cutler Park', short: 'Cutler',   color: '#3b82f6' },
-  other:    { label: 'Other',       short: '',         color: '#8b5cf6' },
+  memorial:  { label: 'Memorial',               short: 'Memorial',  color: '#10b981' },
+  cutler:    { label: 'Cutler Park',             short: 'Cutler',    color: '#3b82f6' },
+  peninsula: { label: 'Charles River Peninsula', short: 'Peninsula', color: '#8b5cf6' },
+  other:     { label: 'Other',                   short: '',          color: '#f97316' },
 };
 
 function locKey(loc) {
   if (!loc || loc === 'Memorial')  return 'memorial';
   if (loc === 'Cutler Park')       return 'cutler';
+  if (loc === 'Peninsula' || loc === 'Charles River Peninsula') return 'peninsula';
   return 'other';
 }
 function locInfo(loc) {
@@ -204,9 +206,10 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
 
   // Brushes — Cancel Day is admin-only
   const brushes = [
-    { id: 'memorial', label: 'Memorial',    color: '#10b981' },
-    { id: 'cutler',   label: 'Cutler Park', color: '#3b82f6' },
-    { id: 'other',    label: 'Other…',      color: '#8b5cf6' },
+    { id: 'memorial',  label: 'Memorial',  color: '#10b981' },
+    { id: 'cutler',    label: 'Cutler',    color: '#3b82f6' },
+    { id: 'peninsula', label: 'Peninsula', color: '#8b5cf6' },
+    { id: 'other',     label: 'Other…',    color: '#f97316' },
     ...(isAdmin ? [{ id: 'cancel', label: 'Cancel Day', color: '#ef4444' }] : []),
   ];
 
@@ -225,6 +228,8 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
       setDayDetail(dateStr, { location: 'Memorial', cancelled: false });
     } else if (brush === 'cutler') {
       setDayDetail(dateStr, { location: 'Cutler Park', cancelled: false });
+    } else if (brush === 'peninsula') {
+      setDayDetail(dateStr, { location: 'Peninsula', cancelled: false });
     } else if (brush === 'other' && otherName.trim()) {
       setDayDetail(dateStr, { location: otherName.trim(), cancelled: false });
     }
