@@ -4,7 +4,6 @@ import React, {
 } from 'react';
 import { supabase, isSupabaseConfigured } from '../supabase';
 import { CAPTAIN_COLORS, DEFAULT_CAPTAINS } from '../utils/seedData';
-import { fetchWorkouts } from '../utils/sheets';
 
 // ── Locations ─────────────────────────────────────────────────────────────────
 export const LOCATIONS = [
@@ -66,6 +65,7 @@ export const DEFAULT_SETTINGS = {
     weatherLat:      42.28,
     weatherLon:      -71.06,
     sheetsUrl:       '',
+    workouts:        {},
     activeWeekIndex: 0,
     athleteSlides:   null,
     captainSlides:   null,
@@ -195,7 +195,6 @@ export function AppProvider({ children }) {
   const [captains,    setCaptains]    = useState(DEFAULT_CAPTAINS);
   const [attendance,  setAttendance]  = useState({});
   const [dayDetails,  setDayDetails]  = useState({});
-  const [workouts,    setWorkouts]    = useState({});
   const [dataLoading, setDataLoading] = useState(true);
   const [syncError,   setSyncError]   = useState(false);
 
@@ -214,15 +213,6 @@ export function AppProvider({ children }) {
     safeSet(STORAGE.DARK_MODE, darkMode);
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
-
-  // Google Sheets workout sync
-  useEffect(() => {
-    const url = settings.onboarding?.sheetsUrl;
-    if (!url) return;
-    fetchWorkouts(url).then(data => {
-      if (Object.keys(data).length) setWorkouts(data);
-    });
-  }, [settings.onboarding?.sheetsUrl]);
 
   // Stale captain cleanup (skip admin and athlete IDs)
   useEffect(() => {
@@ -466,6 +456,16 @@ export function AppProvider({ children }) {
 
   const toggleDarkMode = useCallback(() => setDarkMode(d => !d), []);
 
+  const setWorkout = useCallback(async (dateStr, text) => {
+    const next = { ...(settingsRef.current.onboarding?.workouts || {}) };
+    if (text && text.trim()) {
+      next[dateStr] = text.trim();
+    } else {
+      delete next[dateStr];
+    }
+    updateOnboarding({ workouts: next });
+  }, [updateOnboarding]);
+
   // ── Derived ───────────────────────────────────────────────────────────────────
   const currentCaptain = useMemo(
     () => captains.find(c => c.id === currentCaptainId) || null,
@@ -510,6 +510,9 @@ export function AppProvider({ children }) {
   // Active week index for athlete view
   const activeWeekIndex = settings.onboarding?.activeWeekIndex ?? 0;
 
+  // Workouts derived from settings (captain-editable, stored in Supabase)
+  const workouts = settings.onboarding?.workouts || {};
+
   // ── Context value ─────────────────────────────────────────────────────────────
   return (
     <AppContext.Provider value={{
@@ -524,7 +527,7 @@ export function AppProvider({ children }) {
       verifyTeamCode, verifyAdminCode, verifyCaptainCode, logoutAdmin,
       selectAthleteMode, selectCaptain,
       setCurrentCaptainId: selectCaptain,
-      deselectCaptain, toggleDarkMode,
+      deselectCaptain, toggleDarkMode, setWorkout,
       markAthleteOnboarded, markCaptainOnboarded,
       addCaptain, removeCaptain, updateCaptain,
       setDayDetail, clearDayDetail,

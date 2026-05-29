@@ -6,7 +6,7 @@ import { selectTopPractices } from '../utils/practiceSelector';
 import { fetchWeather } from '../utils/weather';
 
 // ── Practice card ──────────────────────────────────────────────────────────────
-function PracticeCard({ dateStr, weather, isFirst }) {
+function PracticeCard({ dateStr, weather, weatherLoading, isFirst }) {
   const { settings, dayDetails, workouts } = useApp();
 
   const override   = dayDetails[dateStr] || {};
@@ -23,7 +23,7 @@ function PracticeCard({ dateStr, weather, isFirst }) {
 
   return (
     <div
-      className="relative overflow-hidden rounded-3xl bg-gray-900 border border-gray-800"
+      className="relative overflow-hidden rounded-3xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800"
       style={{ boxShadow: `0 4px 32px rgba(0,0,0,0.4), 0 0 0 1px ${loc.color}22` }}
     >
       {/* Location color accent strip */}
@@ -39,30 +39,36 @@ function PracticeCard({ dateStr, weather, isFirst }) {
                 <span className="text-[9px] font-black bg-blue-500 text-white px-2 py-0.5 rounded-full uppercase tracking-wide">Today</span>
               )}
             </div>
-            <h2 className="text-2xl font-black text-white leading-tight">{dateLabel}</h2>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-white leading-tight">{dateLabel}</h2>
           </div>
 
           {/* Weather */}
           {w && (
             <div className="flex flex-col items-end gap-0.5 flex-shrink-0 ml-4">
               <span className="text-3xl leading-none">{w.emoji}</span>
-              <span className="text-sm font-black text-white">{w.high}°</span>
+              <span className="text-sm font-black text-gray-900 dark:text-white">{w.high}°</span>
               <span className="text-xs text-gray-500">{w.low}°</span>
               {w.precip > 10 && (
                 <span className="text-[10px] text-blue-400 font-bold">{w.precip}% rain</span>
               )}
             </div>
           )}
+          {weatherLoading && (
+            <div className="w-10 h-10 flex-shrink-0 ml-4 flex flex-col items-end gap-1 animate-pulse">
+              <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700" />
+              <div className="w-6 h-2 rounded bg-gray-200 dark:bg-gray-700" />
+            </div>
+          )}
         </div>
 
         {/* Divider */}
-        <div className="h-px bg-gray-800 mb-4" />
+        <div className="h-px bg-gray-200 dark:bg-gray-800 mb-4" />
 
         {/* Time + Location row */}
         <div className="flex items-center gap-4 mb-4">
           <div className="flex items-center gap-2">
             <Clock size={13} className="text-gray-500 flex-shrink-0" />
-            <span className="text-sm font-bold text-white">{time}</span>
+            <span className="text-sm font-bold text-gray-900 dark:text-white">{time}</span>
           </div>
           <div className="flex items-center gap-2">
             <MapPin size={13} style={{ color: loc.color }} className="flex-shrink-0" />
@@ -82,12 +88,12 @@ function PracticeCard({ dateStr, weather, isFirst }) {
         {/* Workout */}
         {workout && (
           <>
-            <div className="h-px bg-gray-800 mb-4" />
+            <div className="h-px bg-gray-200 dark:bg-gray-800 mb-4" />
             <div>
               <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">
                 Today's Workout
               </p>
-              <p className="text-sm text-gray-300 leading-relaxed">{workout}</p>
+              <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{workout}</p>
             </div>
           </>
         )}
@@ -99,7 +105,7 @@ function PracticeCard({ dateStr, weather, isFirst }) {
 // ── Locked week placeholder ─────────────────────────────────────────────────────
 function LockedCard({ weekNum }) {
   return (
-    <div className="rounded-3xl bg-gray-900/50 border border-gray-800/50 border-dashed px-5 py-8 flex flex-col items-center gap-3">
+    <div className="rounded-3xl bg-gray-100 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800/50 border-dashed px-5 py-8 flex flex-col items-center gap-3">
       <span className="text-3xl">🔒</span>
       <div className="text-center">
         <p className="text-sm font-bold text-gray-600">Week {weekNum} not released yet</p>
@@ -157,7 +163,7 @@ export default function AthleteDashboard({ weeks }) {
           <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Active</span>
           <span className="w-1 h-1 rounded-full bg-emerald-500" />
         </div>
-        <h1 className="text-2xl font-black text-white leading-tight">
+        <h1 className="text-2xl font-black text-gray-900 dark:text-white leading-tight">
           Week {activeWeekIndex + 1}
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">{range}</p>
@@ -192,6 +198,7 @@ export default function AthleteDashboard({ weeks }) {
               key={dateStr}
               dateStr={dateStr}
               weather={weather}
+              weatherLoading={weatherLoading}
               isFirst={i === 0}
             />
           ))}

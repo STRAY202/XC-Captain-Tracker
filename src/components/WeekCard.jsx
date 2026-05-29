@@ -1,7 +1,25 @@
 import { useRef, useEffect, useState } from 'react';
+
 import { Check, Pencil } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { fromDateStr, isToday } from '../utils/dates';
+
+// ── Workout input ─────────────────────────────────────────────────────────────
+function WorkoutInput({ dateStr, initialValue, onSave }) {
+  const [value, setValue] = useState(initialValue || '');
+  useEffect(() => { setValue(initialValue || ''); }, [initialValue]);
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={e => setValue(e.target.value)}
+      onBlur={() => onSave(dateStr, value)}
+      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+      placeholder="Workout description…"
+      className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-400/50"
+    />
+  );
+}
 
 // ── Location config ───────────────────────────────────────────────────────────
 const LOC = {
@@ -153,6 +171,7 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
   const {
     getWeekStats, captains, attendance, dayDetails, settings,
     currentCaptainId, isAdmin, userMode, setDayDetail, clearDayDetail,
+    workouts, setWorkout,
   } = useApp();
 
   const canEdit = userMode === 'captain' || currentCaptainId === 'admin';
@@ -278,35 +297,56 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
 
         {/* Edit panel */}
         {editMode && (
-          <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800/60 rounded-2xl animate-fade-in">
-            <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">
-              Select · then tap a day above
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {brushes.map(b => (
-                <button
-                  key={b.id}
-                  onClick={() => setBrush(b.id)}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-                    brush === b.id
-                      ? 'text-white shadow-md'
-                      : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 shadow-sm'
-                  }`}
-                  style={brush === b.id ? { backgroundColor: b.color } : {}}
-                >
-                  {b.label}
-                </button>
-              ))}
+          <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800/60 rounded-2xl animate-fade-in space-y-3">
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">
+                Location · tap a day above
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {brushes.map(b => (
+                  <button
+                    key={b.id}
+                    onClick={() => setBrush(b.id)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                      brush === b.id
+                        ? 'text-white shadow-md'
+                        : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 shadow-sm'
+                    }`}
+                    style={brush === b.id ? { backgroundColor: b.color } : {}}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+              {brush === 'other' && (
+                <input
+                  type="text"
+                  value={otherName}
+                  onChange={e => setOtherName(e.target.value)}
+                  placeholder="Type location name, then tap days…"
+                  className="mt-2 w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-violet-400/50"
+                />
+              )}
             </div>
-            {brush === 'other' && (
-              <input
-                type="text"
-                value={otherName}
-                onChange={e => setOtherName(e.target.value)}
-                placeholder="Type location name, then tap days…"
-                className="mt-2 w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-violet-400/50"
-              />
-            )}
+
+            {/* Workout per day */}
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">
+                Workouts
+              </p>
+              <div className="space-y-1.5">
+                {week.days.filter(d => !dayDetails[d]?.cancelled).map(d => {
+                  const dd = fromDateStr(d);
+                  const label = dd.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                  return (
+                    <div key={d} className="flex items-center gap-2">
+                      <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 w-16 flex-shrink-0 leading-tight">{label}</span>
+                      <WorkoutInput dateStr={d} initialValue={workouts[d]} onSave={setWorkout} />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
 

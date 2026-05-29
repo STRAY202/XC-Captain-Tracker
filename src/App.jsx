@@ -21,14 +21,14 @@ function Header({
   onLogout, onHelp, onSettings, darkMode, onToggleDarkMode,
 }) {
   return (
-    <div className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/60">
+    <div className="sticky top-0 z-40 bg-white/95 dark:bg-gray-950/90 backdrop-blur-xl border-b border-gray-200 dark:border-gray-800/60">
       <div className="flex items-center justify-between px-4 py-3 pt-safe max-w-lg mx-auto">
         {/* Left: brand */}
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center flex-shrink-0 shadow-lg">
             <Zap size={14} className="text-white" fill="white" />
           </div>
-          <h1 className="text-sm font-extrabold text-white truncate leading-tight">{title}</h1>
+          <h1 className="text-sm font-extrabold text-gray-900 dark:text-white truncate leading-tight">{title}</h1>
         </div>
 
         {/* Right: actions */}
@@ -36,31 +36,31 @@ function Header({
           {/* Dark mode toggle */}
           <button
             onClick={onToggleDarkMode}
-            className="w-8 h-8 rounded-xl bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition-all active:scale-90"
+            className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-90"
             title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {darkMode
-              ? <Sun size={14} className="text-gray-400" />
-              : <Moon size={14} className="text-gray-400" />
+              ? <Sun size={14} className="text-gray-600 dark:text-gray-400" />
+              : <Moon size={14} className="text-gray-600 dark:text-gray-400" />
             }
           </button>
 
           {/* Help / onboarding replay */}
           <button
             onClick={onHelp}
-            className="w-8 h-8 rounded-xl bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition-all active:scale-90"
+            className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-90"
             title="How to use this app"
           >
-            <HelpCircle size={14} className="text-gray-400" />
+            <HelpCircle size={14} className="text-gray-600 dark:text-gray-400" />
           </button>
 
           {/* Settings */}
           <button
             onClick={onSettings}
-            className="w-8 h-8 rounded-xl bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition-all active:scale-90"
+            className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-90"
             title="Settings"
           >
-            <Settings size={14} className="text-gray-400" />
+            <Settings size={14} className="text-gray-600 dark:text-gray-400" />
           </button>
 
           {/* Profile chip / logout */}
@@ -166,7 +166,7 @@ export default function App() {
   if (userMode === 'athlete') {
     return (
       <ErrorBoundary>
-        <div className="min-h-screen bg-gray-950">
+        <div className="min-h-screen bg-gray-100 dark:bg-gray-950">
           <Header
             title={settings.teamName}
             chipLabel={chipLabel}
@@ -210,7 +210,7 @@ export default function App() {
   // ── Captain / Admin view ────────────────────────────────────────────────────
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gray-950 dark:bg-gray-950">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-950">
         <Header
           title={settings.teamName}
           chipLabel={chipLabel}
@@ -242,7 +242,7 @@ export default function App() {
         </div>
 
         {/* ── Bottom tab bar ──────────────────────────────────────────────────── */}
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-950/95 backdrop-blur-xl border-t border-gray-800/60 pb-safe">
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-t border-gray-200 dark:border-gray-800/60 pb-safe">
           <div className="max-w-lg mx-auto flex">
             {CAP_TABS.map(({ id, label, Icon }) => {
               const isActive = captainTab === id;
@@ -251,7 +251,7 @@ export default function App() {
                   key={id}
                   onClick={() => setCaptainTab(id)}
                   className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 transition-all active:scale-95 ${
-                    isActive ? 'text-emerald-400' : 'text-gray-600'
+                    isActive ? 'text-emerald-400' : 'text-gray-400 dark:text-gray-600'
                   }`}
                 >
                   <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
