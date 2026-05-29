@@ -1,4 +1,4 @@
-// Open-Meteo — free, no API key required, 16-day forecast
+// Open-Meteo — free, no API key required, 16-day hourly forecast
 const BASE = 'https://api.open-meteo.com/v1/forecast';
 
 const EMOJI = {
@@ -24,26 +24,29 @@ const LABEL = {
 
 let _data = {}, _key = '', _exp = 0;
 
-export async function fetchWeather(lat = 42.28, lon = -71.06) {
+// Default coords: Needham, MA — practice location
+export async function fetchWeather(lat = 42.2807, lon = -71.2298) {
   const k = `${lat},${lon}`;
   if (k === _key && Date.now() < _exp && Object.keys(_data).length) return _data;
   try {
     const res = await fetch(
       `${BASE}?latitude=${lat}&longitude=${lon}` +
-      `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode` +
+      `&hourly=temperature_2m,precipitation_probability,weathercode` +
       `&temperature_unit=fahrenheit&timezone=auto&forecast_days=16`
     );
     if (!res.ok) throw new Error(res.status);
-    const { daily } = await res.json();
+    const { hourly } = await res.json();
     const out = {};
-    for (let i = 0; i < daily.time.length; i++) {
-      const c = daily.weathercode[i] ?? 0;
-      out[daily.time[i]] = {
+    for (let i = 0; i < hourly.time.length; i++) {
+      const [dateStr, timeStr] = hourly.time[i].split('T');
+      const hour = parseInt(timeStr, 10);
+      if (hour !== 8) continue; // 8 AM ≈ 8:30 AM practice time
+      const c = hourly.weathercode[i] ?? 0;
+      out[dateStr] = {
         emoji:  EMOJI[c] ?? '🌡️',
         label:  LABEL[c] ?? '',
-        high:   Math.round(daily.temperature_2m_max[i] ?? 70),
-        low:    Math.round(daily.temperature_2m_min[i] ?? 55),
-        precip: Math.round(daily.precipitation_probability_max[i] ?? 0),
+        temp:   Math.round(hourly.temperature_2m[i] ?? 70),
+        precip: Math.round(hourly.precipitation_probability[i] ?? 0),
       };
     }
     _data = out; _key = k; _exp = Date.now() + 3_600_000; // 1h cache

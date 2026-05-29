@@ -7,14 +7,15 @@ import { fetchWeather } from '../utils/weather';
 
 // ── Practice card ──────────────────────────────────────────────────────────────
 function PracticeCard({ dateStr, weather, weatherLoading, isFirst }) {
-  const { settings, dayDetails, workouts } = useApp();
+  const { settings, dayDetails, workouts, weatherOverrides } = useApp();
 
-  const override   = dayDetails[dateStr] || {};
-  const loc        = getLocation(override.location);
-  const time       = override.notes?.match(/^\[TIME:(.*?)\]/)?.[1]?.trim()
-                   || settings.defaultTime || '8:00 AM';
-  const workout    = workouts[dateStr] || '';
-  const w          = weather[dateStr];
+  const override        = dayDetails[dateStr] || {};
+  const loc             = getLocation(override.location);
+  const time            = override.notes?.match(/^\[TIME:(.*?)\]/)?.[1]?.trim()
+                        || settings.defaultTime || '8:00 AM';
+  const workout         = workouts[dateStr] || '';
+  const weatherOverride = weatherOverrides[dateStr] || '';
+  const w               = weather[dateStr];
 
   const d      = fromDateStr(dateStr);
   const dow    = d.toLocaleDateString('en-US', { weekday: 'long' });
@@ -43,22 +44,25 @@ function PracticeCard({ dateStr, weather, weatherLoading, isFirst }) {
           </div>
 
           {/* Weather */}
-          {w && (
+          {weatherOverride ? (
+            <div className="flex flex-col items-end gap-0.5 flex-shrink-0 ml-4 max-w-[100px]">
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 text-right leading-snug">{weatherOverride}</span>
+            </div>
+          ) : w ? (
             <div className="flex flex-col items-end gap-0.5 flex-shrink-0 ml-4">
               <span className="text-3xl leading-none">{w.emoji}</span>
-              <span className="text-sm font-black text-gray-900 dark:text-white">{w.high}°</span>
-              <span className="text-xs text-gray-500">{w.low}°</span>
+              <span className="text-sm font-black text-gray-900 dark:text-white">{w.temp}°</span>
+              <span className="text-[10px] text-gray-500">at 8:30am</span>
               {w.precip > 10 && (
                 <span className="text-[10px] text-blue-400 font-bold">{w.precip}% rain</span>
               )}
             </div>
-          )}
-          {weatherLoading && (
+          ) : weatherLoading ? (
             <div className="w-10 h-10 flex-shrink-0 ml-4 flex flex-col items-end gap-1 animate-pulse">
               <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700" />
               <div className="w-6 h-2 rounded bg-gray-200 dark:bg-gray-700" />
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Divider */}
@@ -77,7 +81,7 @@ function PracticeCard({ dateStr, weather, weatherLoading, isFirst }) {
         </div>
 
         {/* Weather label line */}
-        {w && (
+        {!weatherOverride && w && (
           <div className="flex items-center gap-1.5 mb-4 text-xs text-gray-500">
             <CloudSun size={11} />
             <span>{w.label}</span>

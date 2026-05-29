@@ -62,10 +62,11 @@ export const DEFAULT_SETTINGS = {
     welcomeSubtitle: '',
     slides:          [],
     captainCode:     'captain2026',
-    weatherLat:      42.28,
-    weatherLon:      -71.06,
+    weatherLat:      42.2807,
+    weatherLon:      -71.2298,
     sheetsUrl:       '',
     workouts:        {},
+    weatherOverrides: {},
     activeWeekIndex: 0,
     athleteSlides:   null,
     captainSlides:   null,
@@ -466,6 +467,16 @@ export function AppProvider({ children }) {
     updateOnboarding({ workouts: next });
   }, [updateOnboarding]);
 
+  const setWeatherOverride = useCallback(async (dateStr, text) => {
+    const next = { ...(settingsRef.current.onboarding?.weatherOverrides || {}) };
+    if (text && text.trim()) {
+      next[dateStr] = text.trim();
+    } else {
+      delete next[dateStr];
+    }
+    updateOnboarding({ weatherOverrides: next });
+  }, [updateOnboarding]);
+
   // ── Derived ───────────────────────────────────────────────────────────────────
   const currentCaptain = useMemo(
     () => captains.find(c => c.id === currentCaptainId) || null,
@@ -510,13 +521,13 @@ export function AppProvider({ children }) {
   // Active week index for athlete view
   const activeWeekIndex = settings.onboarding?.activeWeekIndex ?? 0;
 
-  // Workouts derived from settings (captain-editable, stored in Supabase)
-  const workouts = settings.onboarding?.workouts || {};
+  const workouts          = settings.onboarding?.workouts          || {};
+  const weatherOverrides  = settings.onboarding?.weatherOverrides  || {};
 
   // ── Context value ─────────────────────────────────────────────────────────────
   return (
     <AppContext.Provider value={{
-      settings, captains, attendance, dayDetails, workouts,
+      settings, captains, attendance, dayDetails, workouts, weatherOverrides,
       dataLoading, syncError,
       demoMode: false, authLoading: false,
       teamVerified, isAdmin, currentCaptainId, currentCaptain,
@@ -527,7 +538,7 @@ export function AppProvider({ children }) {
       verifyTeamCode, verifyAdminCode, verifyCaptainCode, logoutAdmin,
       selectAthleteMode, selectCaptain,
       setCurrentCaptainId: selectCaptain,
-      deselectCaptain, toggleDarkMode, setWorkout,
+      deselectCaptain, toggleDarkMode, setWorkout, setWeatherOverride,
       markAthleteOnboarded, markCaptainOnboarded,
       addCaptain, removeCaptain, updateCaptain,
       setDayDetail, clearDayDetail,

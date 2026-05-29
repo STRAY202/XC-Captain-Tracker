@@ -4,6 +4,22 @@ import { Check, Pencil } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { fromDateStr, isToday } from '../utils/dates';
 
+// ── Weather override input ────────────────────────────────────────────────────
+function WeatherInput({ dateStr, initialValue, onSave }) {
+  const [value, setValue] = useState(initialValue || '');
+  useEffect(() => { setValue(initialValue || ''); }, [initialValue]);
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={e => setValue(e.target.value)}
+      onBlur={() => onSave(dateStr, value)}
+      placeholder="e.g. ☀️ 72° Clear  (leave blank for auto)"
+      className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-sky-400/50"
+    />
+  );
+}
+
 // ── Workout input ─────────────────────────────────────────────────────────────
 function WorkoutInput({ dateStr, initialValue, onSave }) {
   const [value, setValue] = useState(initialValue || '');
@@ -175,6 +191,7 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
     getWeekStats, captains, attendance, dayDetails, settings,
     currentCaptainId, isAdmin, userMode, setDayDetail, clearDayDetail,
     workouts, setWorkout,
+    weatherOverrides, setWeatherOverride,
   } = useApp();
 
   const canEdit = userMode === 'captain' || currentCaptainId === 'admin';
@@ -348,6 +365,26 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
                     <div key={d} className="flex items-center gap-2">
                       <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 w-16 flex-shrink-0 leading-tight">{label}</span>
                       <WorkoutInput dateStr={d} initialValue={workouts[d]} onSave={setWorkout} />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Weather override per day */}
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">
+                Weather Override
+              </p>
+              <p className="text-[9px] text-gray-500 dark:text-gray-600 mb-2">Leave blank to use auto weather (Needham MA, 8:30am)</p>
+              <div className="space-y-1.5">
+                {week.days.filter(d => !dayDetails[d]?.cancelled).map(d => {
+                  const dd = fromDateStr(d);
+                  const label = dd.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                  return (
+                    <div key={d} className="flex items-center gap-2">
+                      <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 w-16 flex-shrink-0 leading-tight">{label}</span>
+                      <WeatherInput dateStr={d} initialValue={weatherOverrides[d]} onSave={setWeatherOverride} />
                     </div>
                   );
                 })}
