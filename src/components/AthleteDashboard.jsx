@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { MapPin, Clock, CloudSun } from 'lucide-react';
+import { MapPin, Clock, CloudSun, ExternalLink } from 'lucide-react';
 import { useApp, getLocation } from '../context/AppContext';
 import { fromDateStr, formatWeekRange } from '../utils/dates';
 import { selectTopPractices } from '../utils/practiceSelector';
@@ -207,6 +207,22 @@ export default function AthleteDashboard({ weeks }) {
             />
           ))}
         </div>
+      )}
+
+      {/* Training info link */}
+      {settings.onboarding?.sheetsUrl && (
+        <a
+          href={settings.onboarding.sheetsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-5 flex items-center justify-between gap-3 px-4 py-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 active:scale-[0.98] transition-all"
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="text-lg flex-shrink-0">📋</span>
+            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">Click for more training information</span>
+          </div>
+          <ExternalLink size={14} className="text-emerald-500 flex-shrink-0" />
+        </a>
       )}
 
       {/* Future weeks teaser */}
