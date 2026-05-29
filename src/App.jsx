@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { LogOut, Zap, BarChart2, Eye, HelpCircle, Settings } from 'lucide-react';
+import { LogOut, Zap, BarChart2, Eye, HelpCircle, Settings, Moon, Sun } from 'lucide-react';
 import { useApp } from './context/AppContext';
 import { generateSchedule, today, fromDateStr } from './utils/dates';
 import AccessGate from './components/AccessGate';
@@ -18,7 +18,7 @@ const CAP_TABS = [
 // ── Top Header ─────────────────────────────────────────────────────────────────
 function Header({
   title, chipLabel, chipColor,
-  onLogout, onHelp, onSettings,
+  onLogout, onHelp, onSettings, darkMode, onToggleDarkMode,
 }) {
   return (
     <div className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/60">
@@ -33,6 +33,18 @@ function Header({
 
         {/* Right: actions */}
         <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+          {/* Dark mode toggle */}
+          <button
+            onClick={onToggleDarkMode}
+            className="w-8 h-8 rounded-xl bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition-all active:scale-90"
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {darkMode
+              ? <Sun size={14} className="text-gray-400" />
+              : <Moon size={14} className="text-gray-400" />
+            }
+          </button>
+
           {/* Help / onboarding replay */}
           <button
             onClick={onHelp}
@@ -83,7 +95,7 @@ export default function App() {
     currentCaptainId, currentCaptain,
     userMode, athleteName,
     athleteOnboarded, captainOnboarded,
-    darkMode,
+    darkMode, toggleDarkMode,
     deselectCaptain,
     markAthleteOnboarded, markCaptainOnboarded,
     syncError,
@@ -162,6 +174,8 @@ export default function App() {
             onLogout={deselectCaptain}
             onHelp={() => setShowOnboardingReplay(true)}
             onSettings={() => setShowSettings(true)}
+            darkMode={darkMode}
+            onToggleDarkMode={toggleDarkMode}
           />
           <div className="max-w-lg mx-auto pb-8">
             {syncError && !syncDismissed && (
