@@ -218,6 +218,8 @@ export default function App() {
           onLogout={deselectCaptain}
           onHelp={() => setShowOnboardingReplay(true)}
           onSettings={() => setShowSettings(true)}
+          darkMode={darkMode}
+          onToggleDarkMode={toggleDarkMode}
         />
 
         <div className="max-w-lg mx-auto pb-24">
