@@ -11,14 +11,14 @@ export default function CaptainDashboard({ weeks, currentWeekIndex }) {
     dayDetails, attendance, settings,
   } = useApp();
 
+  const todayStr = today();
+
+  const currentWeek = weeks[currentWeekIndex] ?? weeks[0];
+
   const selectionDetails = useMemo(() => {
     if (!currentWeek) return [];
     return getSelectionDetails(currentWeek.days, attendance, captains, dayDetails, 3);
   }, [currentWeek, attendance, captains, dayDetails]);
-
-  const todayStr = today();
-
-  const currentWeek = weeks[currentWeekIndex] ?? weeks[0];
   const weekStats = getWeekStats(currentWeek?.days || []);
   const { coveredCount, totalActive, isCovered, isPartial } = weekStats;
   const missingDays = Math.max(0, settings.minCoveredDays - coveredCount);
