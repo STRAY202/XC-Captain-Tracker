@@ -198,6 +198,7 @@ export function AppProvider({ children }) {
   const [dayDetails,  setDayDetails]  = useState({});
   const [dataLoading, setDataLoading] = useState(true);
   const [syncError,   setSyncError]   = useState(false);
+  const [syncErrorMsg, setSyncErrorMsg] = useState('');
 
   // Stale-closure-safe refs
   const dayDetailsRef  = useRef({});
@@ -227,6 +228,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
       setSyncError(true);
+      setSyncErrorMsg('Supabase not configured (missing env vars)');
       setDataLoading(false);
       return;
     }
@@ -246,7 +248,7 @@ export function AppProvider({ children }) {
     async function load() {
       const failsafe = setTimeout(() => {
         setSyncError(true); setDataLoading(false);
-      }, 12000);
+      }, 25000);
       try {
         const [sRes, cRes, aRes, dRes] = await Promise.all([
           supabase.from('settings').select('*').eq('id', 'main').maybeSingle(),
@@ -277,6 +279,7 @@ export function AppProvider({ children }) {
         clearTimeout(failsafe);
         console.error('[AppContext] load error:', err);
         setSyncError(true);
+        setSyncErrorMsg(err?.message || err?.code || String(err));
         setDataLoading(false);
       }
     }
@@ -528,7 +531,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       settings, captains, attendance, dayDetails, workouts, weatherOverrides,
-      dataLoading, syncError,
+      dataLoading, syncError, syncErrorMsg,
       demoMode: false, authLoading: false,
       teamVerified, isAdmin, currentCaptainId, currentCaptain,
       userMode, athleteName,

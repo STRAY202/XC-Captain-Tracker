@@ -98,7 +98,7 @@ export default function App() {
     darkMode, toggleDarkMode,
     deselectCaptain,
     markAthleteOnboarded, markCaptainOnboarded,
-    syncError,
+    syncError, syncErrorMsg,
   } = useApp();
 
   const [captainTab,           setCaptainTab]           = useState('dashboard');
@@ -181,7 +181,7 @@ export default function App() {
             {syncError && !syncDismissed && (
               <div className="mx-4 mt-3 flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-amber-950/40 border border-amber-800/40">
                 <span className="text-sm flex-shrink-0">⚠️</span>
-                <p className="text-xs text-amber-400 flex-1">Offline — showing cached data</p>
+                <p className="text-xs text-amber-400 flex-1">Offline — cached data{syncErrorMsg ? ` · ${syncErrorMsg}` : ''}</p>
                 <button onClick={() => setSyncDismissed(true)} className="text-amber-700 text-base flex-shrink-0">×</button>
               </div>
             )}
@@ -226,7 +226,7 @@ export default function App() {
           {syncError && !syncDismissed && (
             <div className="mx-4 mt-3 flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-amber-950/40 border border-amber-800/40">
               <span className="text-sm flex-shrink-0">⚠️</span>
-              <p className="text-xs text-amber-400 flex-1">Sync unavailable — changes save locally only</p>
+              <p className="text-xs text-amber-400 flex-1">Sync unavailable{syncErrorMsg ? ` · ${syncErrorMsg}` : ''}</p>
               <button onClick={() => window.location.reload()} className="text-xs font-bold text-amber-400 underline flex-shrink-0">Retry</button>
               <button onClick={() => setSyncDismissed(true)} className="text-amber-700 text-base flex-shrink-0 ml-1">×</button>
             </div>
