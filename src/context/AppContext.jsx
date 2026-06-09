@@ -61,16 +61,15 @@ export const DEFAULT_SETTINGS = {
     welcomeTitle:    '',
     welcomeSubtitle: '',
     slides:          [],
-    captainCode:      'captain2026',
-    weatherLat:       42.2807,
-    weatherLon:       -71.2298,
-    sheetsUrl:        '',
-    workouts:         {},
+    captainCode:     'captain2026',
+    weatherLat:      42.2807,
+    weatherLon:      -71.2298,
+    sheetsUrl:       '',
+    workouts:        {},
     weatherOverrides: {},
-    timeOverrides:    {},
-    activeWeekIndex:  0,
-    athleteSlides:    null,
-    captainSlides:    null,
+    activeWeekIndex: 0,
+    athleteSlides:   null,
+    captainSlides:   null,
   },
 };
 
@@ -126,17 +125,13 @@ function dbToAttendance(rows) {
   }
   return out;
 }
-function dbRowToDayDetail(r) {
-  const obj = {};
-  if (r.location  != null) obj.location  = r.location;
-  if (r.cancelled != null) obj.cancelled = r.cancelled;
-  if (r.notes     != null) obj.notes     = r.notes;
-  return obj;
-}
 function dbToDayDetails(rows) {
   const out = {};
   for (const r of rows) {
-    const obj = dbRowToDayDetail(r);
+    const obj = {};
+    if (r.location  != null) obj.location  = r.location;
+    if (r.cancelled != null) obj.cancelled = r.cancelled;
+    if (r.notes     != null) obj.notes     = r.notes;
     if (Object.keys(obj).length) out[r.date] = obj;
   }
   return out;
@@ -229,19 +224,6 @@ export function AppProvider({ children }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataLoading, captains, currentCaptainId]);
 
-  // Invalidate cached team-code verification when the code changes in Supabase
-  useEffect(() => {
-    if (dataLoading) return;
-    const storedCode = safeGet('xc-verified-code') || '';
-    const currentCode = (settings.teamCode || '').toLowerCase();
-    if (teamVerified && storedCode && storedCode !== currentCode) {
-      setTeamVerified(false);
-      safeRemove(STORAGE.TEAM_VERIFIED);
-      safeRemove('xc-verified-code');
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataLoading, settings.teamCode]);
-
   // Supabase load + realtime
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -325,10 +307,10 @@ export function AppProvider({ children }) {
           });
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'day_details' }, ({ new: r }) => {
-          setDayDetails(prev => ({ ...prev, [r.date]: dbRowToDayDetail(r) }));
+          setDayDetails(prev => ({ ...prev, [r.date]: { location: r.location, cancelled: r.cancelled, notes: r.notes } }));
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'day_details' }, ({ new: r }) => {
-          setDayDetails(prev => ({ ...prev, [r.date]: dbRowToDayDetail(r) }));
+          setDayDetails(prev => ({ ...prev, [r.date]: { location: r.location, cancelled: r.cancelled, notes: r.notes } }));
         })
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'day_details' }, ({ old: r }) => {
           setDayDetails(prev => { const next = { ...prev }; delete next[r.date]; return next; });
@@ -403,13 +385,8 @@ export function AppProvider({ children }) {
 
   // ── Auth ──────────────────────────────────────────────────────────────────────
   const verifyTeamCode = useCallback(async (code) => {
-    const normalized = code.trim().toLowerCase();
-    const ok = normalized === (settingsRef.current.teamCode || '').toLowerCase();
-    if (ok) {
-      setTeamVerified(true);
-      safeSet(STORAGE.TEAM_VERIFIED, 'true');
-      safeSet('xc-verified-code', normalized);
-    }
+    const ok = code.trim().toLowerCase() === (settingsRef.current.teamCode || '').toLowerCase();
+    if (ok) { setTeamVerified(true); safeSet(STORAGE.TEAM_VERIFIED, 'true'); }
     return ok;
   }, []);
 
@@ -495,14 +472,12 @@ export function AppProvider({ children }) {
 
   const setWeatherOverride = useCallback(async (dateStr, text) => {
     const next = { ...(settingsRef.current.onboarding?.weatherOverrides || {}) };
-    if (text && text.trim()) { next[dateStr] = text.trim(); } else { delete next[dateStr]; }
+    if (text && text.trim()) {
+      next[dateStr] = text.trim();
+    } else {
+      delete next[dateStr];
+    }
     updateOnboarding({ weatherOverrides: next });
-  }, [updateOnboarding]);
-
-  const setTimeOverride = useCallback(async (dateStr, text) => {
-    const next = { ...(settingsRef.current.onboarding?.timeOverrides || {}) };
-    if (text && text.trim()) { next[dateStr] = text.trim(); } else { delete next[dateStr]; }
-    updateOnboarding({ timeOverrides: next });
   }, [updateOnboarding]);
 
   // ── Derived ───────────────────────────────────────────────────────────────────
@@ -549,14 +524,13 @@ export function AppProvider({ children }) {
   // Active week index for athlete view
   const activeWeekIndex = settings.onboarding?.activeWeekIndex ?? 0;
 
-  const workouts         = settings.onboarding?.workouts          || {};
-  const weatherOverrides = settings.onboarding?.weatherOverrides  || {};
-  const timeOverrides    = settings.onboarding?.timeOverrides     || {};
+  const workouts          = settings.onboarding?.workouts          || {};
+  const weatherOverrides  = settings.onboarding?.weatherOverrides  || {};
 
   // ── Context value ─────────────────────────────────────────────────────────────
   return (
     <AppContext.Provider value={{
-      settings, captains, attendance, dayDetails, workouts, weatherOverrides, timeOverrides,
+      settings, captains, attendance, dayDetails, workouts, weatherOverrides,
       dataLoading, syncError, syncErrorMsg,
       demoMode: false, authLoading: false,
       teamVerified, isAdmin, currentCaptainId, currentCaptain,
@@ -567,7 +541,7 @@ export function AppProvider({ children }) {
       verifyTeamCode, verifyAdminCode, verifyCaptainCode, logoutAdmin,
       selectAthleteMode, selectCaptain,
       setCurrentCaptainId: selectCaptain,
-      deselectCaptain, toggleDarkMode, setWorkout, setWeatherOverride, setTimeOverride,
+      deselectCaptain, toggleDarkMode, setWorkout, setWeatherOverride,
       markAthleteOnboarded, markCaptainOnboarded,
       addCaptain, removeCaptain, updateCaptain,
       setDayDetail, clearDayDetail,
