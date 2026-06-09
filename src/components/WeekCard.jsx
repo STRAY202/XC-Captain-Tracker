@@ -1,13 +1,14 @@
 import { useRef, useEffect, useState } from 'react';
-import { Check, Pencil } from 'lucide-react';
+import { Check, Pencil, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { fromDateStr, isToday } from '../utils/dates';
+import { WORKOUT_TYPES } from '../utils/workoutTypes';
 
 // ── Location config ───────────────────────────────────────────────────────────
 const LOC = {
-  memorial: { label: 'Memorial',    short: 'Memorial', color: '#10b981' },
-  cutler:   { label: 'Cutler Park', short: 'Cutler',   color: '#3b82f6' },
-  other:    { label: 'Other',       short: '',         color: '#8b5cf6' },
+  memorial: { label: 'Memorial',    color: '#10b981' },
+  cutler:   { label: 'Cutler Park', color: '#3b82f6' },
+  other:    { label: 'Other',       color: '#8b5cf6' },
 };
 
 function locKey(loc) {
@@ -17,11 +18,11 @@ function locKey(loc) {
 }
 function locInfo(loc) {
   const k = locKey(loc);
-  if (k === 'other') return { ...LOC.other, short: loc || '' };
+  if (k === 'other') return { ...LOC.other, label: loc || 'Other' };
   return LOC[k];
 }
 
-// ── Day card ──────────────────────────────────────────────────────────────────
+// ── Day display card ──────────────────────────────────────────────────────────
 function DayCard({ dateStr, editMode, onEditTap }) {
   const {
     captains, attendance, dayDetails, settings,
@@ -109,8 +110,14 @@ function DayCard({ dateStr, editMode, onEditTap }) {
         className="text-[8px] font-bold leading-none mt-1.5 truncate w-full text-center px-0.5"
         style={{ color: myAttending && !editMode ? 'rgba(255,255,255,0.75)' : ld.color }}
       >
-        {ld.short}
+        {ld.label === 'Other' ? (currentLoc || 'Other') : ld.label}
       </span>
+
+      {override.activity && (
+        <span className="text-[10px] leading-none mt-0.5">
+          {WORKOUT_TYPES.find(w => w.id === override.activity)?.emoji || ''}
+        </span>
+      )}
 
       <span className={`text-[11px] font-black leading-none mt-1 ${
         myAttending && !editMode ? 'text-white/90'
@@ -147,17 +154,193 @@ function DayCard({ dateStr, editMode, onEditTap }) {
   );
 }
 
+// ── Per-day edit row ──────────────────────────────────────────────────────────
+function DayEditRow({ dateStr, isAdmin }) {
+  const { dayDetails, setDayDetail } = useApp();
+  const override = dayDetails[dateStr] || {};
+
+  const loc        = override.location || 'Memorial';
+  const isOtherLoc = loc !== 'Memorial' && loc !== 'Cutler Park';
+
+  // Local controlled state for text inputs — avoids spamming DB on every keystroke
+  const [weatherDraft, setWeatherDraft] = useState(override.weather || '');
+  const [customLoc,    setCustomLoc]    = useState(isOtherLoc ? loc : '');
+  const [showOther,    setShowOther]    = useState(isOtherLoc);
+
+  // Sync text drafts when Supabase pushes an update (another device edited)
+  const prevWeather = useRef(override.weather || '');
+  useEffect(() => {
+    const w = override.weather || '';
+    if (w !== prevWeather.current) {
+      prevWeather.current = w;
+      setWeatherDraft(w);
+    }
+  }, [override.weather]);
+
+  const prevLoc = useRef(loc);
+  useEffect(() => {
+    if (loc !== prevLoc.current) {
+      prevLoc.current = loc;
+      const other = loc !== 'Memorial' && loc !== 'Cutler Park';
+      setShowOther(other);
+      if (other) setCustomLoc(loc);
+    }
+  }, [loc]);
+
+  const d        = fromDateStr(dateStr);
+  const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  const setLoc = (newLoc) => setDayDetail(dateStr, { location: newLoc, cancelled: false });
+
+  const handleOtherClick = () => {
+    setShowOther(true);
+    if (!isOtherLoc) setCustomLoc('');
+  };
+
+  const commitCustomLoc = () => {
+    const v = customLoc.trim();
+    if (v) setDayDetail(dateStr, { location: v, cancelled: false });
+  };
+
+  const commitWeather = () => {
+    setDayDetail(dateStr, { weather: weatherDraft.trim() });
+  };
+
+  const toggleCancel = () => {
+    setDayDetail(dateStr, { cancelled: !override.cancelled });
+  };
+
+  const locBtn = (key, label, color) => {
+    const active = key === 'other' ? (isOtherLoc || showOther) : loc === (key === 'memorial' ? 'Memorial' : 'Cutler Park');
+    return (
+      <button
+        key={key}
+        onClick={key === 'other' ? handleOtherClick : () => { setShowOther(false); setLoc(key === 'memorial' ? 'Memorial' : 'Cutler Park'); }}
+        className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all active:scale-95 ${
+          active ? 'text-white shadow-sm' : 'bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 shadow-sm'
+        }`}
+        style={active ? { backgroundColor: color } : {}}
+      >
+        {label}
+      </button>
+    );
+  };
+
+  return (
+    <div className={`rounded-2xl border transition-all ${
+      override.cancelled
+        ? 'bg-gray-50 dark:bg-gray-800/40 border-red-200 dark:border-red-900/50 opacity-60'
+        : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700'
+    }`}>
+      {/* Row header */}
+      <div className="flex items-center justify-between px-3 pt-3 pb-2">
+        <span className="text-xs font-extrabold text-gray-700 dark:text-gray-200">{dayLabel}</span>
+        {isAdmin && (
+          <button
+            onClick={toggleCancel}
+            className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full transition-all active:scale-95 ${
+              override.cancelled
+                ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            {override.cancelled ? <><X size={9} /> Cancelled</> : 'Cancel day'}
+          </button>
+        )}
+      </div>
+
+      {!override.cancelled && (
+        <div className="px-3 pb-3 space-y-2.5">
+
+          {/* Location */}
+          <div>
+            <p className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5">Location</p>
+            <div className="flex gap-1.5 flex-wrap">
+              {locBtn('memorial', 'Memorial',    '#10b981')}
+              {locBtn('cutler',   'Cutler Park', '#3b82f6')}
+              {locBtn('other',    'Other…',      '#8b5cf6')}
+            </div>
+            {showOther && (
+              <input
+                type="text"
+                value={customLoc}
+                onChange={e => setCustomLoc(e.target.value)}
+                onBlur={commitCustomLoc}
+                onKeyDown={e => e.key === 'Enter' && commitCustomLoc()}
+                placeholder="Type location name…"
+                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-xs text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-violet-400/50"
+                autoFocus
+              />
+            )}
+          </div>
+
+          {/* Weather */}
+          <div>
+            <p className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5">Weather</p>
+            <div className="flex gap-1.5 flex-wrap mb-1.5">
+              {['☀️ Sunny', '🌤️ Partly Cloudy', '☁️ Cloudy', '🌧️ Rainy', '⛈️ Storms', '🌫️ Foggy', '🌬️ Windy', '🥵 Hot', '🥶 Cold'].map(w => (
+                <button
+                  key={w}
+                  onClick={() => { setWeatherDraft(w); setDayDetail(dateStr, { weather: w }); }}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all active:scale-95 ${
+                    weatherDraft === w
+                      ? 'bg-blue-500 text-white shadow-sm'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={weatherDraft}
+              onChange={e => setWeatherDraft(e.target.value)}
+              onBlur={commitWeather}
+              onKeyDown={e => e.key === 'Enter' && commitWeather()}
+              placeholder="Or type custom weather…"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-xs text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400/50"
+            />
+          </div>
+
+          {/* Activity / Workout */}
+          <div>
+            <p className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5">Activity</p>
+            <div className="flex gap-1.5 flex-wrap">
+              {WORKOUT_TYPES.map(w => {
+                const active = override.activity === w.id;
+                return (
+                  <button
+                    key={w.id}
+                    onClick={() => setDayDetail(dateStr, { activity: active ? null : w.id })}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all active:scale-95 ${
+                      active ? 'text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                    }`}
+                    style={active ? { backgroundColor: w.color } : {}}
+                  >
+                    <span>{w.emoji}</span>
+                    <span>{w.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Week card ─────────────────────────────────────────────────────────────────
 export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
   const cardRef = useRef(null);
   const {
     getWeekStats, captains, attendance, dayDetails, settings,
-    currentCaptainId, isAdmin, setDayDetail, clearDayDetail,
+    currentCaptainId, isAdmin,
   } = useApp();
 
-  const [editMode,  setEditMode]  = useState(false);
-  const [brush,     setBrush]     = useState('memorial');
-  const [otherName, setOtherName] = useState('');
+  const [editMode, setEditMode] = useState(false);
 
   const { coveredCount, totalActive, isCovered, isPartial } = getWeekStats(week.days);
   const isUncovered = coveredCount === 0 && totalActive > 0;
@@ -181,35 +364,6 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
                  : numDays <= 5 ? 'grid-cols-5'
                  : 'grid-cols-6';
 
-  // Brushes — Cancel Day is admin-only
-  const brushes = [
-    { id: 'memorial', label: 'Memorial',    color: '#10b981' },
-    { id: 'cutler',   label: 'Cutler Park', color: '#3b82f6' },
-    { id: 'other',    label: 'Other…',      color: '#8b5cf6' },
-    ...(isAdmin ? [{ id: 'cancel', label: 'Cancel Day', color: '#ef4444' }] : []),
-  ];
-
-  const applyBrush = (dateStr) => {
-    const override = dayDetails[dateStr] || {};
-    if (brush === 'cancel' && isAdmin) {
-      if (!override.cancelled) {
-        setDayDetail(dateStr, { cancelled: true });
-      } else {
-        const { cancelled: _, ...rest } = override;
-        Object.keys(rest).length === 0
-          ? clearDayDetail(dateStr)
-          : setDayDetail(dateStr, { cancelled: false });
-      }
-    } else if (brush === 'memorial') {
-      setDayDetail(dateStr, { location: 'Memorial', cancelled: false });
-    } else if (brush === 'cutler') {
-      setDayDetail(dateStr, { location: 'Cutler Park', cancelled: false });
-    } else if (brush === 'other' && otherName.trim()) {
-      setDayDetail(dateStr, { location: otherName.trim(), cancelled: false });
-    }
-  };
-
-  // Tour IDs — only attach to the first week card so onboarding can spotlight them
   const tourId = (name) => weekIndex === 0 ? name : undefined;
 
   return (
@@ -248,14 +402,14 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
 
             <button
               id={tourId('tour-edit-btn')}
-              onClick={() => { setEditMode(s => !s); setBrush('memorial'); }}
+              onClick={() => setEditMode(s => !s)}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all active:scale-95 ${
                 editMode
                   ? 'bg-emerald-500 text-white shadow-sm'
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
               }`}
             >
-              {editMode ? '✓ Done' : <><Pencil size={10} /> Edit</>}
+              {editMode ? <><Check size={10} strokeWidth={3} /> Done</> : <><Pencil size={10} /> Edit</>}
             </button>
           </div>
         </div>
@@ -266,43 +420,24 @@ export default function WeekCard({ week, isCurrentWeek, weekIndex }) {
             <DayCard
               key={dateStr}
               dateStr={dateStr}
-              editMode={editMode}
-              onEditTap={() => applyBrush(dateStr)}
+              editMode={false}
             />
           ))}
         </div>
 
-        {/* Edit panel */}
+        {/* Edit panel — one row per practice day */}
         {editMode && (
-          <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800/60 rounded-2xl animate-fade-in">
-            <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">
-              Select · then tap a day above
+          <div className="mt-3 space-y-2 animate-fade-in">
+            <p className="text-[10px] font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-0.5">
+              Edit practice days
             </p>
-            <div className="flex gap-2 flex-wrap">
-              {brushes.map(b => (
-                <button
-                  key={b.id}
-                  onClick={() => setBrush(b.id)}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-                    brush === b.id
-                      ? 'text-white shadow-md'
-                      : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 shadow-sm'
-                  }`}
-                  style={brush === b.id ? { backgroundColor: b.color } : {}}
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
-            {brush === 'other' && (
-              <input
-                type="text"
-                value={otherName}
-                onChange={e => setOtherName(e.target.value)}
-                placeholder="Type location name, then tap days…"
-                className="mt-2 w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-violet-400/50"
+            {week.days.map(dateStr => (
+              <DayEditRow
+                key={dateStr}
+                dateStr={dateStr}
+                isAdmin={isAdmin}
               />
-            )}
+            ))}
           </div>
         )}
 

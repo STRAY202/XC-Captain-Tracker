@@ -110,9 +110,21 @@ function dbToDayDetails(rows) {
     if (row.location  != null) obj.location  = row.location;
     if (row.cancelled != null) obj.cancelled = row.cancelled;
     if (row.notes     != null) obj.notes     = row.notes;
+    if (row.weather   != null) obj.weather   = row.weather;
+    if (row.activity  != null) obj.activity  = row.activity;
     if (Object.keys(obj).length) out[row.date] = obj;
   }
   return out;
+}
+
+function rowToDayDetail(r) {
+  const obj = {};
+  if (r.location  != null) obj.location  = r.location;
+  if (r.cancelled != null) obj.cancelled = r.cancelled;
+  if (r.notes     != null) obj.notes     = r.notes;
+  if (r.weather   != null) obj.weather   = r.weather;
+  if (r.activity  != null) obj.activity  = r.activity;
+  return obj;
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -290,10 +302,10 @@ export function AppProvider({ children }) {
           });
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'day_details' }, ({ new: r }) => {
-          setDayDetails(prev => ({ ...prev, [r.date]: { location: r.location, cancelled: r.cancelled, notes: r.notes } }));
+          setDayDetails(prev => ({ ...prev, [r.date]: rowToDayDetail(r) }));
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'day_details' }, ({ new: r }) => {
-          setDayDetails(prev => ({ ...prev, [r.date]: { location: r.location, cancelled: r.cancelled, notes: r.notes } }));
+          setDayDetails(prev => ({ ...prev, [r.date]: rowToDayDetail(r) }));
         })
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'day_details' }, ({ old: r }) => {
           setDayDetails(prev => { const next = { ...prev }; delete next[r.date]; return next; });
@@ -310,11 +322,18 @@ export function AppProvider({ children }) {
 
   const setDayDetail = useCallback(async (dateStr, patch) => {
     const current = dayDetailsRef.current[dateStr] || {};
+    // Treat null explicitly so callers can clear a field with null
     const merged  = { ...current, ...patch };
     setDayDetails(prev => ({ ...prev, [dateStr]: merged }));
+    if (!supabase) return;
     supabase.from('day_details').upsert({
-      date: dateStr, location: merged.location ?? null, cancelled: merged.cancelled ?? false,
-      notes: merged.notes ?? null, updated_at: new Date().toISOString(),
+      date:       dateStr,
+      location:   merged.location   ?? null,
+      cancelled:  merged.cancelled  ?? false,
+      notes:      merged.notes      ?? null,
+      weather:    merged.weather    ?? null,
+      activity:   merged.activity   ?? null,
+      updated_at: new Date().toISOString(),
     }).then(({ error }) => { if (error) console.error('setDayDetail:', error); });
   }, []);
 
