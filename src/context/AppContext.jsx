@@ -67,6 +67,7 @@ export const DEFAULT_SETTINGS = {
     sheetsUrl:       '',
     workouts:        {},
     weatherOverrides: {},
+    timeOverrides:    {},
     activeWeekIndex: 0,
     athleteSlides:   null,
     captainSlides:   null,
@@ -472,12 +473,14 @@ export function AppProvider({ children }) {
 
   const setWeatherOverride = useCallback(async (dateStr, text) => {
     const next = { ...(settingsRef.current.onboarding?.weatherOverrides || {}) };
-    if (text && text.trim()) {
-      next[dateStr] = text.trim();
-    } else {
-      delete next[dateStr];
-    }
+    if (text && text.trim()) { next[dateStr] = text.trim(); } else { delete next[dateStr]; }
     updateOnboarding({ weatherOverrides: next });
+  }, [updateOnboarding]);
+
+  const setTimeOverride = useCallback(async (dateStr, text) => {
+    const next = { ...(settingsRef.current.onboarding?.timeOverrides || {}) };
+    if (text && text.trim()) { next[dateStr] = text.trim(); } else { delete next[dateStr]; }
+    updateOnboarding({ timeOverrides: next });
   }, [updateOnboarding]);
 
   // ── Derived ───────────────────────────────────────────────────────────────────
@@ -524,13 +527,14 @@ export function AppProvider({ children }) {
   // Active week index for athlete view
   const activeWeekIndex = settings.onboarding?.activeWeekIndex ?? 0;
 
-  const workouts          = settings.onboarding?.workouts          || {};
-  const weatherOverrides  = settings.onboarding?.weatherOverrides  || {};
+  const workouts         = settings.onboarding?.workouts          || {};
+  const weatherOverrides = settings.onboarding?.weatherOverrides  || {};
+  const timeOverrides    = settings.onboarding?.timeOverrides     || {};
 
   // ── Context value ─────────────────────────────────────────────────────────────
   return (
     <AppContext.Provider value={{
-      settings, captains, attendance, dayDetails, workouts, weatherOverrides,
+      settings, captains, attendance, dayDetails, workouts, weatherOverrides, timeOverrides,
       dataLoading, syncError, syncErrorMsg,
       demoMode: false, authLoading: false,
       teamVerified, isAdmin, currentCaptainId, currentCaptain,
@@ -541,7 +545,7 @@ export function AppProvider({ children }) {
       verifyTeamCode, verifyAdminCode, verifyCaptainCode, logoutAdmin,
       selectAthleteMode, selectCaptain,
       setCurrentCaptainId: selectCaptain,
-      deselectCaptain, toggleDarkMode, setWorkout, setWeatherOverride,
+      deselectCaptain, toggleDarkMode, setWorkout, setWeatherOverride, setTimeOverride,
       markAthleteOnboarded, markCaptainOnboarded,
       addCaptain, removeCaptain, updateCaptain,
       setDayDetail, clearDayDetail,
